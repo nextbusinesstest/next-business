@@ -244,7 +244,8 @@ export default function PacksRouter({ spec }) {
       {sections
         .filter((s) => s.module === "hero")
         .map((s, idx) => (
-          <Hero key={`hero-${idx}`} spec={spec} data={getByRef(spec, s.props_ref)} />
+          const heroVariant = s.variant;
+          return <Hero key={`hero-${idx}`} spec={spec} data={getByRef(spec, s.props_ref)} variant={heroVariant} />;
         ))}
 
       {/* Resto de secciones */}
