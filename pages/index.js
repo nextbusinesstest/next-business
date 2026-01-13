@@ -58,7 +58,7 @@ export default function Home() {
             <img
               src="/logo.png"
               alt="Logo Next Business"
-              className="w-28 h-28 object-contain"
+              className="w-14 h-14 object-contain"
             />
             <div>
               <div className="text-lg font-semibold text-blue-900">
@@ -127,7 +127,7 @@ export default function Home() {
               <img
                 src="/logo.png"
                 alt="Next Business"
-                className="w-40 h-40 object-contain"
+                className="w-80 h-80 object-contain"
               />
             </div>
           </section>
