@@ -123,7 +123,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="rounded-xl overflow-hidden border border-gray-100 shadow-sm flex items-center justify-center bg-gray-50">
+            <div className="rounded-xl overflow-hidden border shadow-sm flex items-center justify-center">
               <img
                 src="/logo.png"
                 alt="Next Business"
