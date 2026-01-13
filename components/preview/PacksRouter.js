@@ -1,259 +1,327 @@
-import React from "react";
+import { useMemo } from "react";
+
+/**
+ * PacksRouter (unificado)
+ * - Renderiza header/footer según layout.header_variant / layout.footer_variant
+ * - Renderiza secciones según layout.pages.home.sections (V2)
+ * - Lee props desde spec.modules[props_ref]
+ * - Incluye “fallbacks” para que si falta una variant, no rompa
+ */
+
+/* -----------------------------
+  Utils
+----------------------------- */
 
 function getByRef(spec, ref) {
-  if (!ref) return null;
-  const key = ref.startsWith("modules.") ? ref.replace("modules.", "") : ref;
+  // ref esperado: "modules.x"
+  if (!ref || typeof ref !== "string") return null;
+  const parts = ref.split(".");
+  if (parts.length !== 2) return null;
+  const [root, key] = parts;
+  if (root !== "modules") return null;
   return spec?.modules?.[key] ?? null;
 }
 
-function SectionWrap({ id, children, dense = false }) {
+function cx(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function cap(s) {
+  if (!s) return "";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function safeStr(v, fallback = "—") {
+  const t = (v ?? "").toString().trim();
+  return t || fallback;
+}
+
+/* -----------------------------
+  Shared layout primitives
+----------------------------- */
+
+function Container({ children }) {
+  return <div className="max-w-6xl mx-auto px-6">{children}</div>;
+}
+
+function SectionWrap({ id, title, kicker, children, className }) {
   return (
-    <section id={id} className={dense ? "py-10" : "py-16"}>
-      <div className="mx-auto max-w-6xl px-6">{children}</div>
+    <section id={id} className={cx("py-14 border-t border-gray-100", className)}>
+      <Container>
+        {kicker ? <div className="text-xs tracking-wide uppercase text-gray-500">{kicker}</div> : null}
+        {title ? <h2 className="mt-2 text-2xl font-semibold text-gray-900">{title}</h2> : null}
+        <div className={cx(title ? "mt-6" : "", "")}>{children}</div>
+      </Container>
     </section>
   );
 }
 
-function Title({ title, subtitle }) {
-  return (
-    <div className="mb-8">
-      {subtitle ? (
-        <div className="text-xs font-semibold tracking-wider text-gray-500">{subtitle}</div>
-      ) : null}
-      <h2 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h2>
-    </div>
-  );
-}
+/* -----------------------------
+  Header variants
+----------------------------- */
 
-function Header({ spec }) {
-  const name = spec?.business?.name || "Preview";
-  const pack = spec?.layout?.pack || "Layout";
-  const subtitle =
-    pack === "ecommerce_conversion"
-      ? "Ecommerce conversion layout"
-      : pack === "local_service_trust"
-      ? "Local service trust layout"
-      : pack;
+function HeaderMinimal({ spec }) {
+  const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
+  const pack = spec?.layout?.pack || "";
+  const personality = spec?.brand?.brand_personality || "";
+
+  // nav items (si más adelante los generas)
+  const navItems = spec?.navigation?.items || [];
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-        <div className="flex items-center gap-3">
-          <div
-            className="h-9 w-9 rounded-full flex items-center justify-center text-white font-semibold"
-            style={{ background: "var(--c-primary)" }}
+    <header className="border-b bg-white sticky top-0 z-20">
+      <Container>
+        <div className="py-4 flex items-center justify-between gap-6">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-[var(--c-accent)]/20 flex items-center justify-center text-[var(--c-accent)] font-semibold shrink-0">
+              {(brandName || "P").slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="font-semibold text-gray-900 truncate">{brandName}</div>
+              <div className="text-xs text-gray-500 truncate">
+                {pack ? pack : "preview"} {personality ? `· ${personality}` : ""}
+              </div>
+            </div>
+          </div>
+
+          <nav className="hidden md:flex items-center gap-5 text-sm text-gray-700">
+            {navItems.map((it) => (
+              <a key={it.href || it.label} href={it.href} className="hover:text-gray-900">
+                {it.label}
+              </a>
+            ))}
+            <a
+              href="#contact"
+              className="ml-2 inline-flex items-center justify-center px-4 py-2 rounded-full border border-gray-200 hover:bg-gray-50"
+            >
+              Contacto
+            </a>
+          </nav>
+
+          <a
+            href="#contact"
+            className="md:hidden inline-flex items-center justify-center px-3 py-2 rounded-full border border-gray-200 text-sm"
           >
-            {name.slice(0, 1).toUpperCase()}
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">{name}</div>
-            <div className="text-xs text-gray-500">{subtitle}</div>
-          </div>
-        </div>
-
-        <nav className="flex items-center gap-4 text-sm">
-          <a className="text-gray-700 hover:text-gray-900" href="#contact">
             Contacto
           </a>
-        </nav>
-      </div>
+        </div>
+      </Container>
     </header>
   );
 }
 
-function Footer({ spec }) {
-  const left = spec?.business?.name || "Preview";
-  const right =
-    spec?.brand?.brand_personality
-      ? `${spec.brand.brand_personality} · ${spec.strategy?.web_strategy || ""}`
-      : "Next Business";
+function HeaderTrust({ spec }) {
+  const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
+  const phone = spec?.contact?.phone;
+
+  return (
+    <header className="border-b bg-white sticky top-0 z-20">
+      <Container>
+        <div className="py-4 flex items-center justify-between gap-6">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-lg bg-[var(--c-primary)] text-white flex items-center justify-center font-semibold shrink-0">
+              {(brandName || "P").slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="font-semibold text-gray-900 truncate">{brandName}</div>
+              <div className="text-xs text-gray-500 truncate">Servicio · Confianza · Garantía</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {phone ? (
+              <a
+                href={`tel:${phone}`}
+                className="hidden sm:inline-flex items-center justify-center px-4 py-2 rounded-full bg-[var(--c-primary)] text-white text-sm font-semibold hover:opacity-95"
+              >
+                Llamar
+              </a>
+            ) : null}
+            <a
+              href="#contact"
+              className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-gray-200 hover:bg-gray-50 text-sm"
+            >
+              Solicitar presupuesto
+            </a>
+          </div>
+        </div>
+      </Container>
+    </header>
+  );
+}
+
+/* -----------------------------
+  Footer variants
+----------------------------- */
+
+function FooterSimple({ spec }) {
+  const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
+  const pack = spec?.layout?.pack || "pack";
+  const personality = spec?.brand?.brand_personality || "personality";
 
   return (
     <footer className="border-t bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-8 text-xs text-gray-500">
-        <div>{left}</div>
-        <div>{right}</div>
-      </div>
+      <Container>
+        <div className="py-10 flex items-center justify-between gap-4 text-sm text-gray-500">
+          <div className="truncate">{brandName}</div>
+          <div className="truncate">{pack} · {personality}</div>
+        </div>
+      </Container>
     </footer>
   );
 }
 
 /* -----------------------------
-   HERO Variants
+  Module variants
 ----------------------------- */
 
-function HeroMinimal({ spec, data }) {
-  const headline = data?.headline || spec?.seo?.title || spec?.business?.name || "Preview";
-  const subheadline = data?.subheadline || spec?.seo?.description || "";
-  const primary = data?.primary_cta || { label: "Ver más", href: "#categories" };
-  const secondary = data?.secondary_cta || { label: "Contacto", href: "#contact" };
+function HeroProductMinimal({ spec, data }) {
+  const headline = data?.headline || spec?.hero?.headline || "Headline";
+  const subheadline = data?.subheadline || spec?.hero?.subheadline || "";
+  const primary = data?.primary_cta || null;
+  const secondary = data?.secondary_cta || null;
+
+  const contact = spec?.contact || {};
 
   return (
-    <section className="pt-16 pb-10">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+    <section className="py-16">
+      <Container>
+        <div className="grid gap-10 lg:grid-cols-2 items-start">
           <div>
-            <h1 className="text-5xl font-semibold tracking-tight">{headline}</h1>
-            {subheadline ? <p className="mt-4 text-lg text-gray-600">{subheadline}</p> : null}
+            <h1 className="text-4xl md:text-5xl font-semibold text-gray-900 leading-tight">
+              {headline}
+            </h1>
+            {subheadline ? <p className="mt-4 text-gray-600 max-w-xl">{subheadline}</p> : null}
 
-            <div className="mt-7 flex flex-wrap gap-3">
-              <a
-                href={primary.href || "#"}
-                className="inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold text-white"
-                style={{ background: "var(--c-primary)" }}
-              >
-                {primary.label || "Ver más"}
-              </a>
-              <a
-                href={secondary.href || "#"}
-                className="inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold"
-              >
-                {secondary.label || "Contacto"}
-              </a>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border bg-white p-6 shadow-sm">
-            <div className="text-xs font-semibold tracking-wider text-gray-500">RESUMEN</div>
-            <div className="mt-2 text-xl font-semibold">{spec?.business?.name || "Preview"}</div>
-
-            <div className="mt-5 grid gap-3">
-              <div className="rounded-2xl border p-4">
-                <div className="text-xs font-semibold text-gray-500">Contacto</div>
-                <div className="mt-2 text-sm text-gray-800">
-                  {spec?.contact?.phone ? <div>{spec.contact.phone}</div> : null}
-                  {spec?.contact?.email ? <div>{spec.contact.email}</div> : null}
-                </div>
-              </div>
-              {spec?.contact?.address ? (
-                <div className="rounded-2xl border p-4">
-                  <div className="text-xs font-semibold text-gray-500">Dirección</div>
-                  <div className="mt-2 text-sm text-gray-800">{spec.contact.address}</div>
-                </div>
+            <div className="mt-8 flex flex-wrap gap-3">
+              {primary ? (
+                <a
+                  href={primary.href || "#"}
+                  className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[var(--c-accent)] text-white font-semibold hover:opacity-95"
+                >
+                  {primary.label || "Empezar"}
+                </a>
+              ) : null}
+              {secondary ? (
+                <a
+                  href={secondary.href || "#"}
+                  className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-gray-200 hover:bg-gray-50 font-semibold"
+                >
+                  {secondary.label || "Ver más"}
+                </a>
               ) : null}
             </div>
           </div>
+
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.08)]">
+            <div className="text-xs tracking-wide uppercase text-gray-500">Resumen</div>
+            <div className="mt-2 text-lg font-semibold text-gray-900">{spec?.business?.name || "Preview"}</div>
+
+            <div className="mt-6 space-y-3">
+              <div className="rounded-2xl border border-gray-100 p-4">
+                <div className="text-xs text-gray-500">Contacto</div>
+                <div className="mt-1 text-sm text-gray-900">
+                  {safeStr(contact.phone)}
+                  <br />
+                  {safeStr(contact.email)}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-gray-100 p-4">
+                <div className="text-xs text-gray-500">Dirección</div>
+                <div className="mt-1 text-sm text-gray-900">{safeStr(contact.address)}</div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }
 
-// ✅ Composición B: “split hero” con placeholder visual + copy
-function HeroSplit({ spec, data }) {
-  const headline = data?.headline || spec?.seo?.title || spec?.business?.name || "Preview";
-  const subheadline = data?.subheadline || spec?.seo?.description || "";
-  const primary = data?.primary_cta || { label: "Ver categorías", href: "#categories" };
-  const secondary = data?.secondary_cta || { label: "Ver condiciones", href: "#benefits" };
+/**
+ * ✅ NUEVO: Hero split (composición B)
+ * - Panel izquierdo “destacado”
+ * - Panel derecho con headline + mini contacto
+ */
+function HeroProductSplit({ spec, data }) {
+  const headline = data?.headline || "Headline";
+  const subheadline = data?.subheadline || "";
+  const primary = data?.primary_cta || null;
+  const secondary = data?.secondary_cta || null;
+
+  const contact = spec?.contact || {};
+  const kickerLeft = "Destacado";
+  const titleLeft = "Compra con claridad";
+  const descLeft = "Envío, devoluciones y soporte sin sorpresas.";
 
   return (
-    <section className="pt-14 pb-12">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="grid gap-8 lg:grid-cols-2 lg:items-stretch">
-          {/* “Imagen” / bloque visual */}
-          <div className="rounded-[28px] border bg-white shadow-sm overflow-hidden">
-            <div
-              className="h-full min-h-[280px] flex flex-col justify-between p-8"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(0,0,0,0.04), rgba(0,0,0,0.02))",
-              }}
-            >
-              <div className="text-xs font-semibold tracking-wider text-gray-500">
-                DESTACADO
-              </div>
+    <section className="py-16">
+      <Container>
+        <div className="grid gap-6 lg:grid-cols-2 items-stretch">
+          <div className="rounded-3xl border border-gray-200 bg-gray-50 p-8 flex flex-col justify-between min-h-[260px]">
+            <div>
+              <div className="text-xs tracking-wide uppercase text-gray-500">{kickerLeft}</div>
+              <h2 className="mt-4 text-xl font-semibold text-gray-900">{titleLeft}</h2>
+              <p className="mt-2 text-sm text-gray-600 max-w-md">{descLeft}</p>
+            </div>
 
-              <div className="mt-6">
-                <div className="text-2xl font-semibold tracking-tight">
-                  Compra con claridad
-                </div>
-                <div className="mt-2 text-sm text-gray-600">
-                  Envío, devoluciones y soporte: sin sorpresas.
-                </div>
-              </div>
-
-              <div className="mt-10 flex gap-2">
-                <span
-                  className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold text-white"
-                  style={{ background: "var(--c-primary)" }}
-                >
-                  Pago seguro
-                </span>
-                <span className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold">
-                  Devoluciones
-                </span>
-              </div>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <a
+                href={secondary?.href || "#categories"}
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-sm font-semibold"
+              >
+                {secondary?.label || "Devoluciones"}
+              </a>
             </div>
           </div>
 
-          {/* Copy + CTAs */}
-          <div className="rounded-[28px] border bg-white p-8 shadow-sm">
-            <div className="text-xs font-semibold tracking-wider text-gray-500">TIENDA ONLINE</div>
-            <h1 className="mt-3 text-5xl font-semibold tracking-tight">{headline}</h1>
-            {subheadline ? <p className="mt-4 text-lg text-gray-600">{subheadline}</p> : null}
+          <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-[0_20px_60px_rgba(0,0,0,0.06)]">
+            <div className="text-xs tracking-wide uppercase text-gray-500">Tienda online</div>
 
-            <div className="mt-7 flex flex-wrap gap-3">
+            <h1 className="mt-3 text-3xl md:text-4xl font-semibold text-gray-900 leading-tight">
+              {headline}
+            </h1>
+            {subheadline ? <p className="mt-3 text-gray-600">{subheadline}</p> : null}
+
+            <div className="mt-6 flex flex-wrap gap-3">
               <a
-                href={primary.href || "#"}
-                className="inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold text-white"
-                style={{ background: "var(--c-primary)" }}
+                href={primary?.href || "#categories"}
+                className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[var(--c-accent)] text-white font-semibold hover:opacity-95"
               >
-                {primary.label || "Ver categorías"}
-              </a>
-              <a
-                href={secondary.href || "#"}
-                className="inline-flex items-center justify-center rounded-2xl border px-5 py-3 text-sm font-semibold"
-              >
-                {secondary.label || "Ver condiciones"}
+                {primary?.label || "Ver catálogo"}
               </a>
             </div>
 
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border p-4">
-                <div className="text-xs font-semibold text-gray-500">Teléfono</div>
-                <div className="mt-1 text-sm font-semibold">{spec?.contact?.phone || "-"}</div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-gray-100 p-4">
+                <div className="text-xs text-gray-500">Teléfono</div>
+                <div className="mt-1 text-sm text-gray-900">{safeStr(contact.phone)}</div>
               </div>
-              <div className="rounded-2xl border p-4">
-                <div className="text-xs font-semibold text-gray-500">Email</div>
-                <div className="mt-1 text-sm font-semibold">{spec?.contact?.email || "-"}</div>
+              <div className="rounded-2xl border border-gray-100 p-4">
+                <div className="text-xs text-gray-500">Email</div>
+                <div className="mt-1 text-sm text-gray-900">{safeStr(contact.email)}</div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }
 
-function Hero({ spec, data, variant }) {
-  switch (variant) {
-    case "hero_product_split_v1":
-      return <HeroSplit spec={spec} data={data} />;
-    case "hero_product_minimal_v1":
-    default:
-      return <HeroMinimal spec={spec} data={data} />;
-  }
-}
-
-/* -----------------------------
-   Cards Variants (Categories)
------------------------------ */
-
-function CardsGrid({ id, data }) {
-  const title = data?.title || "Categorías";
+function CardsGridMinimal({ data }) {
+  const title = data?.title || "Compra por categorías";
   const items = Array.isArray(data?.items) ? data.items : [];
 
   return (
-    <SectionWrap id={id}>
-      <Title title={title} />
+    <SectionWrap id={data?.id || "categories"} title={title} kicker="Explora rápido">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it, idx) => (
-          <div key={idx} className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-lg font-semibold">{it.name || it.title || "Item"}</div>
-            {it.description ? <div className="mt-2 text-sm text-gray-600">{it.description}</div> : null}
-            <div className="mt-4 inline-flex items-center text-sm font-semibold" style={{ color: "var(--c-accent)" }}>
-              Ver →
-            </div>
+          <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5 hover:shadow-sm transition">
+            <div className="font-semibold text-gray-900">{it.name}</div>
+            {it.description ? <div className="mt-1 text-sm text-gray-600">{it.description}</div> : null}
+            <div className="mt-3 text-sm text-[var(--c-accent)] font-semibold">Ver →</div>
           </div>
         ))}
       </div>
@@ -261,25 +329,43 @@ function CardsGrid({ id, data }) {
   );
 }
 
-// ✅ Composición B: scroller horizontal
-function CardsScroller({ id, data }) {
-  const title = data?.title || "Categorías";
+/**
+ * ✅ NUEVO: Categories scroller (composición B)
+ */
+function CardsScrollerMinimal({ data }) {
+  const title = data?.title || "Compra por categorías";
   const items = Array.isArray(data?.items) ? data.items : [];
 
   return (
-    <SectionWrap id={id} dense>
-      <Title title={title} subtitle="Explora rápido" />
-      <div className="flex gap-4 overflow-auto pb-2">
+    <SectionWrap id={data?.id || "categories"} title={title} kicker="Explora rápido">
+      <div className="flex gap-4 overflow-x-auto pb-3 -mx-2 px-2">
         {items.map((it, idx) => (
           <div
             key={idx}
-            className="min-w-[260px] rounded-2xl border bg-white p-5 shadow-sm"
+            className="min-w-[240px] rounded-2xl border border-gray-200 bg-white p-5 hover:shadow-sm transition"
           >
-            <div className="text-lg font-semibold">{it.name || it.title || "Item"}</div>
-            {it.description ? <div className="mt-2 text-sm text-gray-600">{it.description}</div> : null}
-            <div className="mt-4 inline-flex items-center text-sm font-semibold" style={{ color: "var(--c-accent)" }}>
-              Abrir →
-            </div>
+            <div className="font-semibold text-gray-900">{it.name}</div>
+            {it.description ? <div className="mt-1 text-sm text-gray-600">{it.description}</div> : null}
+            <div className="mt-3 text-sm text-[var(--c-accent)] font-semibold">Abrir →</div>
+          </div>
+        ))}
+      </div>
+      <div className="h-1 rounded-full bg-gray-200 mt-3" />
+    </SectionWrap>
+  );
+}
+
+function BulletsInlineMinimal({ data }) {
+  const title = data?.title || "Compra sin complicaciones";
+  const bullets = Array.isArray(data?.bullets) ? data.bullets : [];
+
+  return (
+    <SectionWrap id={data?.id || "benefits"} title={title} kicker="Condiciones claras">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {bullets.map((b, idx) => (
+          <div key={idx} className="text-sm text-gray-700 flex gap-2">
+            <span className="mt-1 inline-block w-2 h-2 rounded-full bg-[var(--c-accent)] shrink-0" />
+            <span>{b}</span>
           </div>
         ))}
       </div>
@@ -287,52 +373,19 @@ function CardsScroller({ id, data }) {
   );
 }
 
-function Cards({ id, data, variant }) {
-  if (variant === "categories_scroller_min_v1") {
-    return <CardsScroller id={id} data={data} />;
-  }
-  // default / A
-  return <CardsGrid id={id} data={data} />;
-}
-
-/* -----------------------------
-   Benefits Variants (Bullets)
------------------------------ */
-
-function BenefitsInline({ id, data }) {
-  const title = data?.title || "Beneficios";
+/**
+ * ✅ NUEVO: Benefits cards (composición B)
+ */
+function BenefitsCardsMinimal({ data }) {
+  const title = data?.title || "Compra sin complicaciones";
   const bullets = Array.isArray(data?.bullets) ? data.bullets : [];
 
   return (
-    <SectionWrap id={id} dense>
-      <Title title={title} />
-      <ul className="grid gap-3">
+    <SectionWrap id={data?.id || "benefits"} title={title} kicker="Condiciones claras">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {bullets.map((b, idx) => (
-          <li key={idx} className="flex gap-3">
-            <span className="mt-2 inline-block h-2 w-2 rounded-full" style={{ background: "var(--c-accent)" }} />
-            <span className="text-gray-700">{b}</span>
-          </li>
-        ))}
-      </ul>
-    </SectionWrap>
-  );
-}
-
-// ✅ Composición B: beneficios en cards
-function BenefitsCards({ id, data }) {
-  const title = data?.title || "Beneficios";
-  const bullets = Array.isArray(data?.bullets) ? data.bullets : [];
-
-  return (
-    <SectionWrap id={id}>
-      <Title title={title} subtitle="Condiciones claras" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {bullets.map((b, idx) => (
-          <div key={idx} className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm font-semibold" style={{ color: "var(--c-accent)" }}>
-              ✓
-            </div>
-            <div className="mt-2 text-sm text-gray-700">{b}</div>
+          <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-sm font-semibold text-gray-900">{b}</div>
           </div>
         ))}
       </div>
@@ -340,29 +393,15 @@ function BenefitsCards({ id, data }) {
   );
 }
 
-function Bullets({ id, data, variant }) {
-  if (variant === "benefits_cards_min_v1") {
-    return <BenefitsCards id={id} data={data} />;
-  }
-  // default / A
-  return <BenefitsInline id={id} data={data} />;
-}
-
-/* -----------------------------
-   Services Grid (sin variante de momento)
------------------------------ */
-
-function ServicesGrid({ id, data }) {
+function ServicesGridAuto({ data }) {
   const title = data?.title || "Servicios";
   const items = Array.isArray(data?.items) ? data.items : [];
-
   return (
-    <SectionWrap id={id}>
-      <Title title={title} />
+    <SectionWrap id={data?.id || "services"} title={title}>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it, idx) => (
-          <div key={idx} className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="font-semibold">{it.name || "Servicio"}</div>
+          <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="font-semibold text-gray-900">{it.name}</div>
             {it.description ? <div className="mt-2 text-sm text-gray-600">{it.description}</div> : null}
           </div>
         ))}
@@ -371,158 +410,205 @@ function ServicesGrid({ id, data }) {
   );
 }
 
-/* -----------------------------
-   Text Section (sin variante de momento)
------------------------------ */
-
-function TextSection({ id, data }) {
-  const title = data?.title || "Sobre nosotros";
+function TextAuto({ data }) {
+  const title = data?.title || "Sobre la empresa";
   const body = data?.body || "";
-
   return (
-    <SectionWrap id={id}>
-      <Title title={title} />
-      <div className="max-w-3xl text-gray-700 leading-relaxed">{body}</div>
+    <SectionWrap id={data?.id || "about"} title={title}>
+      <div className="text-gray-700 leading-relaxed max-w-3xl text-sm">{body}</div>
     </SectionWrap>
   );
 }
 
-/* -----------------------------
-   Contact Variants
------------------------------ */
-
-function ContactSplit({ id, spec, data }) {
+function ContactAuto({ spec, data }) {
   const title = data?.title || "Contacto";
-  const body = data?.body || "Ponte en contacto y te respondemos pronto.";
+  const body = data?.body || "";
+  const contact = spec?.contact || {};
 
   return (
-    <SectionWrap id={id}>
-      <Title title={title} />
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="text-xs font-semibold text-gray-500">TELÉFONO</div>
-          <div className="mt-2 font-semibold">{spec?.contact?.phone || "-"}</div>
+    <SectionWrap id="contact" title={title}>
+      <div className="grid gap-6 lg:grid-cols-2 items-start">
+        <div>
+          <p className="text-sm text-gray-600 max-w-xl">{body}</p>
         </div>
-        <div className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="text-xs font-semibold text-gray-500">EMAIL</div>
-          <div className="mt-2 font-semibold">{spec?.contact?.email || "-"}</div>
-        </div>
-        <div className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="text-xs font-semibold text-gray-500">DIRECCIÓN</div>
-          <div className="mt-2 font-semibold">{spec?.contact?.address || "-"}</div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-xs text-gray-500">Teléfono</div>
+            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.phone)}</div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-xs text-gray-500">Email</div>
+            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.email)}</div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-xs text-gray-500">Dirección</div>
+            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.address)}</div>
+          </div>
         </div>
       </div>
-
-      <div className="mt-8 max-w-3xl text-gray-700">{body}</div>
     </SectionWrap>
   );
 }
 
-// ✅ Composición B: contacto centrado en card
-function ContactCenter({ id, spec, data }) {
+/**
+ * ✅ NUEVO: Contact split (ecommerce A)
+ * - Izquierda: copy
+ * - Derecha: tarjetas de contacto
+ */
+function ContactSplitMinimal({ spec, data }) {
   const title = data?.title || "Contacto";
-  const body = data?.body || "Ponte en contacto y te respondemos pronto.";
+  const body = data?.body || "Escríbenos para dudas de tallas, envíos, devoluciones o disponibilidad.";
+  const contact = spec?.contact || {};
 
   return (
-    <SectionWrap id={id}>
-      <div className="mx-auto max-w-2xl rounded-[28px] border bg-white p-8 shadow-sm text-center">
-        <div className="text-xs font-semibold tracking-wider text-gray-500">HABLEMOS</div>
-        <h2 className="mt-3 text-4xl font-semibold tracking-tight">{title}</h2>
-        <p className="mt-3 text-gray-600">{body}</p>
-
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <a
-            href={spec?.contact?.phone ? `tel:${spec.contact.phone.replace(/\s/g, "")}` : "#"}
-            className="rounded-2xl border px-5 py-3 text-sm font-semibold"
-          >
-            {spec?.contact?.phone || "Teléfono"}
-          </a>
-          <a
-            href={spec?.contact?.email ? `mailto:${spec.contact.email}` : "#"}
-            className="rounded-2xl px-5 py-3 text-sm font-semibold text-white"
-            style={{ background: "var(--c-primary)" }}
-          >
-            {spec?.contact?.email || "Email"}
-          </a>
+    <SectionWrap id="contact" title={title}>
+      <div className="grid gap-8 lg:grid-cols-2 items-start">
+        <div>
+          <p className="text-sm text-gray-600 max-w-xl">{body}</p>
         </div>
 
-        {spec?.contact?.address ? (
-          <div className="mt-6 text-xs text-gray-500">{spec.contact.address}</div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-xs text-gray-500">Teléfono</div>
+            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.phone)}</div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-xs text-gray-500">Email</div>
+            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.email)}</div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-xs text-gray-500">Dirección</div>
+            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.address)}</div>
+          </div>
+        </div>
+      </div>
+    </SectionWrap>
+  );
+}
+
+/**
+ * ✅ NUEVO: Contact center (ecommerce B)
+ */
+function ContactCenterMinimal({ spec, data }) {
+  const title = data?.title || "Contacto";
+  const body = data?.body || "Escríbenos para dudas de tallas, envíos, devoluciones o disponibilidad.";
+  const contact = spec?.contact || {};
+
+  return (
+    <SectionWrap id="contact" title={title} kicker="Hablemos">
+      <div className="max-w-2xl mx-auto rounded-3xl border border-gray-200 bg-white p-8 text-center">
+        <p className="text-sm text-gray-600">{body}</p>
+
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <div className="rounded-full border border-gray-200 px-4 py-2 text-sm">
+            {safeStr(contact.phone)}
+          </div>
+          <div className="rounded-full border border-gray-200 px-4 py-2 text-sm">
+            {safeStr(contact.email)}
+          </div>
+        </div>
+
+        {contact.address ? (
+          <div className="mt-4 text-xs text-gray-500">{contact.address}</div>
         ) : null}
       </div>
     </SectionWrap>
   );
 }
 
-function Contact({ id, spec, data, variant }) {
-  if (variant === "contact_center_min_v1") {
-    return <ContactCenter id={id} spec={spec} data={data} />;
-  }
-  // default / A
-  return <ContactSplit id={id} spec={spec} data={data} />;
-}
+/* -----------------------------
+  Variant maps
+----------------------------- */
+
+const HEADER_MAP = {
+  header_minimal_v1: HeaderMinimal,
+  header_trust_v1: HeaderTrust,
+};
+
+const FOOTER_MAP = {
+  footer_simple_v1: FooterSimple,
+};
+
+const HERO_MAP = {
+  hero_product_minimal_v1: HeroProductMinimal,
+  hero_product_split_v1: HeroProductSplit, // ✅ NUEVO
+};
+
+const SECTION_MAP = {
+  // ecommerce + base
+  categories_grid_min_v1: CardsGridMinimal,
+  categories_scroller_min_v1: CardsScrollerMinimal, // ✅ NUEVO
+  benefits_inline_min_v1: BulletsInlineMinimal,
+  benefits_cards_min_v1: BenefitsCardsMinimal, // ✅ NUEVO
+
+  services_grid_auto_v1: ServicesGridAuto,
+  text_auto_v1: TextAuto,
+
+  contact_auto_v1: ContactAuto,
+  contact_split_min_v1: ContactSplitMinimal, // ✅ NUEVO
+  contact_center_min_v1: ContactCenterMinimal, // ✅ NUEVO
+
+  // bridge
+  cards_auto_v1: CardsGridMinimal,
+  bullets_auto_v1: BulletsInlineMinimal,
+};
 
 /* -----------------------------
-   Main Router (V2)
+  Main renderer
 ----------------------------- */
 
 export default function PacksRouter({ spec }) {
-  const sections = spec?.layout?.pages?.home?.sections || [];
+  const headerKey = spec?.layout?.header_variant || "header_minimal_v1";
+  const footerKey = spec?.layout?.footer_variant || "footer_simple_v1";
 
-  // Un truco simple: density controla spacing general (light = más aire)
-  const density = spec?.brand?.brand_expression?.density || "medium";
+  const Header = HEADER_MAP[headerKey] || HeaderMinimal;
+  const Footer = FOOTER_MAP[footerKey] || FooterSimple;
+
+  const sections = useMemo(() => {
+    const home = spec?.layout?.pages?.home;
+    return Array.isArray(home?.sections) ? home.sections : [];
+  }, [spec]);
 
   return (
-    <div className={density === "light" ? "text-[15px]" : "text-[16px]"}>
+    <div className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]">
       <Header spec={spec} />
 
-      {/* HERO */}
-      {sections
-        .filter((s) => s.module === "hero")
-        .map((s, idx) => (
-          <Hero
-            key={`hero-${idx}`}
-            spec={spec}
-            data={getByRef(spec, s.props_ref)}
-            variant={s.variant}
-          />
-        ))}
+      {sections.map((s, idx) => {
+        const data = getByRef(spec, s.props_ref);
 
-      {/* RESTO */}
-      {sections
-        .filter((s) => s.module !== "hero")
-        .map((s, idx) => {
-          const data = getByRef(spec, s.props_ref);
-          const id = data?.id || (s.module === "contact" ? "contact" : `section-${idx}`);
+        // HERO
+        if (s.module === "hero") {
+          const Hero = HERO_MAP[s.variant] || HeroProductMinimal;
+          return <Hero key={idx} spec={spec} data={data} />;
+        }
 
-          switch (s.module) {
-            case "cards":
-              return <Cards key={idx} id={id} data={data} variant={s.variant} />;
-
-            case "bullets":
-              return <Bullets key={idx} id={id} data={data} variant={s.variant} />;
-
-            case "services_grid":
-              return <ServicesGrid key={idx} id={id} data={data} />;
-
-            case "text":
-              return <TextSection key={idx} id={id} data={data} />;
-
-            case "contact":
-              return <Contact key={idx} id={"contact"} spec={spec} data={data} variant={s.variant} />;
-
-            default:
-              // fallback: para módulos aún no implementados
-              return (
-                <SectionWrap key={idx} id={id}>
-                  <Title title={data?.title || s.module} subtitle="Módulo sin renderer" />
-                  <pre className="rounded-xl border bg-white p-4 text-xs overflow-auto">
-                    {JSON.stringify({ module: s.module, variant: s.variant, data }, null, 2)}
-                  </pre>
-                </SectionWrap>
-              );
+        // SECTIONS
+        const Comp = SECTION_MAP[s.variant];
+        if (Comp) {
+          // Contact necesita spec para phone/email/address
+          if (
+            s.variant === "contact_auto_v1" ||
+            s.variant === "contact_split_min_v1" ||
+            s.variant === "contact_center_min_v1"
+          ) {
+            return <Comp key={idx} spec={spec} data={data} />;
           }
-        })}
+          return <Comp key={idx} spec={spec} data={data} />;
+        }
+
+        // fallback debug visible (no rompe build)
+        return (
+          <SectionWrap key={idx} title={`Módulo no soportado: ${cap(s.module)}`}>
+            <div className="text-sm text-red-600">
+              No hay renderer para variant <b>{s.variant}</b>
+            </div>
+            <pre className="mt-3 text-xs bg-gray-50 border rounded-xl p-4 overflow-auto">
+              {JSON.stringify({ module: s.module, variant: s.variant, data }, null, 2)}
+            </pre>
+          </SectionWrap>
+        );
+      })}
 
       <Footer spec={spec} />
     </div>
