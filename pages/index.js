@@ -123,7 +123,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="overflow-hidden shadow-sm flex items-center justify-center">
+            <div className="overflow-hidden flex items-center justify-center">
               <img
                 src="/logo.png"
                 alt="Next Business"
