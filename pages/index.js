@@ -54,11 +54,11 @@ export default function Home() {
       <div className="min-h-screen bg-white text-gray-800 antialiased">
         {/* HEADER */}
         <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
-          <div className="flex items-center gap-0">
+          <div className="flex items-center gap-4">
             <img
               src="/logo.png"
               alt="Logo Next Business"
-              className="w-28 h-28 object-contain"
+              className="w-14 h-14 object-contain scale-[2.0] origin-left"
             />
             <div>
               <div className="text-lg font-semibold text-blue-900">
