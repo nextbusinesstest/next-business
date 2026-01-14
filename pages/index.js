@@ -60,7 +60,7 @@ export default function Home() {
               alt="Logo Next Business"
               className="w-14 h-14 object-contain scale-[2.0] origin-left"
             />
-            <div>
+            <div className="ml-14">
               <div className="text-lg font-semibold text-blue-900">
                 Next Business
               </div>
