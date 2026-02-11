@@ -62,6 +62,7 @@ function SectionWrap({ id, title, kicker, children, className }) {
 
 function HeaderMinimal({ spec }) {
   const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
+  const type = spec?.business?.type || "";
   const pack = spec?.layout?.pack || "";
   const personality = spec?.brand?.brand_personality || "";
 
@@ -79,7 +80,7 @@ function HeaderMinimal({ spec }) {
             <div className="min-w-0">
               <div className="font-semibold text-gray-900 truncate">{brandName}</div>
               <div className="text-xs text-gray-500 truncate">
-                {pack ? pack : "preview"} {personality ? `· ${personality}` : ""}
+                {type ? type : "unknown"} {pack ? `· ${pack}` : ""} {personality ? `· ${personality}` : ""}
               </div>
             </div>
           </div>
@@ -156,6 +157,7 @@ function HeaderTrust({ spec }) {
 
 function FooterSimple({ spec }) {
   const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
+  const type = spec?.business?.type || "unknown";
   const pack = spec?.layout?.pack || "pack";
   const personality = spec?.brand?.brand_personality || "personality";
 
@@ -164,7 +166,7 @@ function FooterSimple({ spec }) {
       <Container>
         <div className="py-10 flex items-center justify-between gap-4 text-sm text-gray-500">
           <div className="truncate">{brandName}</div>
-          <div className="truncate">{pack} · {personality}</div>
+          <div className="truncate">{type} · {pack} · {personality}</div>
         </div>
       </Container>
     </footer>
