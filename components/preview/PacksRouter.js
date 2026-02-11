@@ -580,10 +580,7 @@ export default function PacksRouter({ spec }) {
   const themeStyle = useMemo(() => toStyleVars(theme.vars), [theme]);
 
   return (
-    <div
-      className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]"
-      style={themeStyle}
-    >
+    <div className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]" style={themeStyle}>
       <Header spec={spec} />
 
       {sections.map((s, idx) => {
