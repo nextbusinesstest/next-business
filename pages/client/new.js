@@ -35,13 +35,13 @@ export default function ClientNew() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const isOtherGoal = websiteGoal === "other";
+  const needsGoalDetail = websiteGoal === "other" || websiteGoal === "landing";
 
   const canSubmit = useMemo(() => {
     if (!safeTrim(businessName)) return false;
     if (!safeTrim(sector)) return false;
     if (!safeTrim(websiteGoal)) return false;
-    if (isOtherGoal && !safeTrim(websiteGoalDetail)) return false;
+    if (needsGoalDetail && !safeTrim(websiteGoalDetail)) return false;
     return true;
   }, [businessName, sector, websiteGoal, websiteGoalDetail, isOtherGoal]);
 
@@ -225,7 +225,7 @@ export default function ClientNew() {
               ))}
             </select>
 
-            {isOtherGoal && (
+            {needsGoalDetail && (
               <div className="mt-4">
                 <label className="block text-sm text-neutral-300 mb-2">
                   Describe el objetivo *
