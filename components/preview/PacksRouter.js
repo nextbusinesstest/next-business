@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { resolveTheme, toStyleVars } from "../../lib/themes";
 
 /**
  * PacksRouter (unificado)
@@ -46,7 +47,10 @@ function Container({ children }) {
 
 function SectionWrap({ id, title, kicker, children, className }) {
   return (
-    <section id={id} className={cx("py-14 border-t border-gray-100", className)}>
+    <section
+      className={cx("border-t", className)}
+      style={{ paddingTop: "var(--section-py)", paddingBottom: "var(--section-py)", borderColor: "var(--border)" }}
+    >
       <Container>
         {kicker ? <div className="text-xs tracking-wide uppercase text-gray-500">{kicker}</div> : null}
         {title ? <h2 className="mt-2 text-2xl font-semibold text-gray-900">{title}</h2> : null}
@@ -70,7 +74,7 @@ function HeaderMinimal({ spec }) {
   const navItems = spec?.navigation?.items || [];
 
   return (
-    <header className="border-b bg-white sticky top-0 z-20">
+    <header className="border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-20">
       <Container>
         <div className="py-4 flex items-center justify-between gap-6">
           <div className="flex items-center gap-3 min-w-0">
@@ -116,7 +120,7 @@ function HeaderTrust({ spec }) {
   const phone = spec?.contact?.phone;
 
   return (
-    <header className="border-b bg-white sticky top-0 z-20">
+    <header className="border-b border-[var(--border)] bg-[var(--surface)] sticky top-0 z-20">
       <Container>
         <div className="py-4 flex items-center justify-between gap-6">
           <div className="flex items-center gap-3 min-w-0">
@@ -572,8 +576,14 @@ export default function PacksRouter({ spec }) {
     return Array.isArray(home?.sections) ? home.sections : [];
   }, [spec]);
 
+  const theme = useMemo(() => resolveTheme(spec), [spec]);
+  const themeStyle = useMemo(() => toStyleVars(theme.vars), [theme]);
+
   return (
-    <div className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]">
+    <div
+      className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]"
+      style={themeStyle}
+    >
       <Header spec={spec} />
 
       {sections.map((s, idx) => {
