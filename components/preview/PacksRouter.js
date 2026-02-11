@@ -82,8 +82,8 @@ function HeaderMinimal({ spec }) {
               {(brandName || "P").slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <div className="font-semibold text-gray-900 truncate">{brandName}</div>
-              <div className="text-xs text-gray-500 truncate">
+              <div className="font-semibold text-[var(--c-text)] truncate">{brandName}</div>
+              <div className="text-xs text-[var(--c-text)]/60 truncate">
                 {type ? type : "unknown"} {pack ? `· ${pack}` : ""} {personality ? `· ${personality}` : ""}
               </div>
             </div>
@@ -97,7 +97,7 @@ function HeaderMinimal({ spec }) {
             ))}
             <a
               href="#contact"
-              className="ml-2 inline-flex items-center justify-center px-4 py-2 rounded-full border border-gray-200 hover:bg-gray-50"
+              className="ml-2 inline-flex items-center justify-center px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95"
             >
               Contacto
             </a>
@@ -105,7 +105,7 @@ function HeaderMinimal({ spec }) {
 
           <a
             href="#contact"
-            className="md:hidden inline-flex items-center justify-center px-3 py-2 rounded-full border border-gray-200 text-sm"
+            className="md:hidden inline-flex items-center justify-center px-3 py-2 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95 text-sm"
           >
             Contacto
           </a>
@@ -128,8 +128,8 @@ function HeaderTrust({ spec }) {
               {(brandName || "P").slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <div className="font-semibold text-gray-900 truncate">{brandName}</div>
-              <div className="text-xs text-gray-500 truncate">Servicio · Confianza · Garantía</div>
+              <div className="font-semibold text-[var(--c-text)] truncate">{brandName}</div>
+              <div className="text-xs text-[var(--c-text)]/60 truncate">Servicio · Confianza · Garantía</div>
             </div>
           </div>
 
@@ -225,7 +225,7 @@ function HeroProductMinimal({ spec, data }) {
 
             <div className="mt-6 space-y-3">
               <div className="rounded-2xl border border-gray-100 p-4">
-                <div className="text-xs text-gray-500">Contacto</div>
+                <div className="text-xs text-[var(--c-text)]/60">Contacto</div>
                 <div className="mt-1 text-sm text-gray-900">
                   {safeStr(contact.phone)}
                   <br />
@@ -234,7 +234,7 @@ function HeroProductMinimal({ spec, data }) {
               </div>
 
               <div className="rounded-2xl border border-gray-100 p-4">
-                <div className="text-xs text-gray-500">Dirección</div>
+                <div className="text-xs text-[var(--c-text)]/60">Dirección</div>
                 <div className="mt-1 text-sm text-gray-900">{safeStr(contact.address)}</div>
               </div>
             </div>
@@ -301,11 +301,11 @@ function HeroProductSplit({ spec, data }) {
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-gray-100 p-4">
-                <div className="text-xs text-gray-500">Teléfono</div>
+                <div className="text-xs text-[var(--c-text)]/60">Teléfono</div>
                 <div className="mt-1 text-sm text-gray-900">{safeStr(contact.phone)}</div>
               </div>
               <div className="rounded-2xl border border-gray-100 p-4">
-                <div className="text-xs text-gray-500">Email</div>
+                <div className="text-xs text-[var(--c-text)]/60">Email</div>
                 <div className="mt-1 text-sm text-gray-900">{safeStr(contact.email)}</div>
               </div>
             </div>
@@ -324,9 +324,14 @@ function CardsGridMinimal({ data }) {
     <SectionWrap id={data?.id || "categories"} title={title} kicker="Explora rápido">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it, idx) => (
-          <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5 hover:shadow-sm transition">
-            <div className="font-semibold text-gray-900">{it.name}</div>
-            {it.description ? <div className="mt-1 text-sm text-gray-600">{it.description}</div> : null}
+          <div
+            key={idx}
+            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:opacity-95 transition"
+          >
+            <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
+            {it.description ? (
+              <div className="mt-1 text-sm text-[var(--c-text)]/70">{it.description}</div>
+            ) : null}
             <div className="mt-3 text-sm text-[var(--c-accent)] font-semibold">Ver →</div>
           </div>
         ))}
@@ -348,15 +353,17 @@ function CardsScrollerMinimal({ data }) {
         {items.map((it, idx) => (
           <div
             key={idx}
-            className="min-w-[240px] rounded-2xl border border-gray-200 bg-white p-5 hover:shadow-sm transition"
+            className="min-w-[240px] rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:opacity-95 transition"
           >
-            <div className="font-semibold text-gray-900">{it.name}</div>
-            {it.description ? <div className="mt-1 text-sm text-gray-600">{it.description}</div> : null}
+            <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
+            {it.description ? (
+              <div className="mt-1 text-sm text-[var(--c-text)]/70">{it.description}</div>
+            ) : null}
             <div className="mt-3 text-sm text-[var(--c-accent)] font-semibold">Abrir →</div>
           </div>
         ))}
       </div>
-      <div className="h-1 rounded-full bg-gray-200 mt-3" />
+      <div className="h-1 rounded-full bg-[var(--border)] mt-3" />
     </SectionWrap>
   );
 }
@@ -390,8 +397,8 @@ function BenefitsCardsMinimal({ data }) {
     <SectionWrap id={data?.id || "benefits"} title={title} kicker="Condiciones claras">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {bullets.map((b, idx) => (
-          <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="text-sm font-semibold text-gray-900">{b}</div>
+          <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-sm font-semibold text-[var(--c-text)]">{b}</div>
           </div>
         ))}
       </div>
@@ -402,13 +409,16 @@ function BenefitsCardsMinimal({ data }) {
 function ServicesGridAuto({ data }) {
   const title = data?.title || "Servicios";
   const items = Array.isArray(data?.items) ? data.items : [];
+
   return (
     <SectionWrap id={data?.id || "services"} title={title}>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it, idx) => (
-          <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="font-semibold text-gray-900">{it.name}</div>
-            {it.description ? <div className="mt-2 text-sm text-gray-600">{it.description}</div> : null}
+          <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
+            {it.description ? (
+              <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -439,17 +449,17 @@ function ContactAuto({ spec, data }) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="text-xs text-gray-500">Teléfono</div>
-            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.phone)}</div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-xs text-[var(--c-text)]/60">Teléfono</div>
+            <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.phone)}</div>
           </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="text-xs text-gray-500">Email</div>
-            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.email)}</div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-xs text-[var(--c-text)]/60">Email</div>
+            <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.email)}</div>
           </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="text-xs text-gray-500">Dirección</div>
-            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.address)}</div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-xs text-[var(--c-text)]/60">Dirección</div>
+            <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.address)}</div>
           </div>
         </div>
       </div>
@@ -475,17 +485,17 @@ function ContactSplitMinimal({ spec, data }) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="text-xs text-gray-500">Teléfono</div>
-            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.phone)}</div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-xs text-[var(--c-text)]/60">Teléfono</div>
+            <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.phone)}</div>
           </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="text-xs text-gray-500">Email</div>
-            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.email)}</div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-xs text-[var(--c-text)]/60">Email</div>
+            <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.email)}</div>
           </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="text-xs text-gray-500">Dirección</div>
-            <div className="mt-1 text-sm font-semibold text-gray-900">{safeStr(contact.address)}</div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-xs text-[var(--c-text)]/60">Dirección</div>
+            <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.address)}</div>
           </div>
         </div>
       </div>
