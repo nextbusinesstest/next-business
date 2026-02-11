@@ -43,7 +43,7 @@ export default function ClientNew() {
     if (!safeTrim(websiteGoal)) return false;
     if (needsGoalDetail && !safeTrim(websiteGoalDetail)) return false;
     return true;
-  }, [businessName, sector, websiteGoal, websiteGoalDetail, isOtherGoal]);
+  }, [businessName, sector, websiteGoal, websiteGoalDetail, needsGoalDetail]);
 
   function updateService(i, value) {
     setServices((prev) => prev.map((s, idx) => (idx === i ? value : s)));
