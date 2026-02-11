@@ -42,7 +42,7 @@ function safeStr(v, fallback = "—") {
 ----------------------------- */
 
 function Container({ children }) {
-  return <div className="max-w-6xl mx-auto px-6">{children}</div>;
+  return <div className="max-w-6xl mx-auto px-5 sm:px-6">{children}</div>;
 }
 
 function SectionWrap({ id, title, kicker, children, className }) {
@@ -52,8 +52,8 @@ function SectionWrap({ id, title, kicker, children, className }) {
       style={{ paddingTop: "var(--section-py)", paddingBottom: "var(--section-py)", borderColor: "var(--border)" }}
     >
       <Container>
-        {kicker ? <div className="text-xs tracking-wide uppercase text-gray-500">{kicker}</div> : null}
-        {title ? <h2 className="mt-2 text-2xl font-semibold text-gray-900">{title}</h2> : null}
+        {kicker ? <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">{kicker}</div> : null}
+        {title ? <h2 className="mt-2 text-2xl font-semibold text-[var(--c-text)]">{title}</h2> : null}
         <div className={cx(title ? "mt-6" : "", "")}>{children}</div>
       </Container>
     </section>
@@ -166,7 +166,7 @@ function FooterSimple({ spec }) {
   const personality = spec?.brand?.brand_personality || "personality";
 
   return (
-    <footer className="border-t bg-white">
+    <footer className="border-t border-[var(--border)] bg-[var(--surface)]">
       <Container>
         <div className="py-10 flex items-center justify-between gap-4 text-sm text-gray-500">
           <div className="truncate">{brandName}</div>
@@ -219,7 +219,7 @@ function HeroProductMinimal({ spec, data }) {
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.08)]">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-3xl p-6 shadow-[var(--shadow)]">
             <div className="text-xs tracking-wide uppercase text-gray-500">Resumen</div>
             <div className="mt-2 text-lg font-semibold text-gray-900">{spec?.business?.name || "Preview"}</div>
 
@@ -265,7 +265,7 @@ function HeroProductSplit({ spec, data }) {
     <section className="py-16">
       <Container>
         <div className="grid gap-6 lg:grid-cols-2 items-stretch">
-          <div className="rounded-3xl border border-gray-200 bg-gray-50 p-8 flex flex-col justify-between min-h-[260px]">
+          <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-8 flex flex-col justify-between min-h-[260px]">
             <div>
               <div className="text-xs tracking-wide uppercase text-gray-500">{kickerLeft}</div>
               <h2 className="mt-4 text-xl font-semibold text-gray-900">{titleLeft}</h2>
@@ -275,14 +275,14 @@ function HeroProductSplit({ spec, data }) {
             <div className="mt-8 flex flex-wrap gap-3">
               <a
                 href={secondary?.href || "#categories"}
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-sm font-semibold"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95 text-sm font-semibold"
               >
                 {secondary?.label || "Devoluciones"}
               </a>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-[0_20px_60px_rgba(0,0,0,0.06)]">
+          <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-[var(--shadow)]">
             <div className="text-xs tracking-wide uppercase text-gray-500">Tienda online</div>
 
             <h1 className="mt-3 text-3xl md:text-4xl font-semibold text-gray-900 leading-tight">
