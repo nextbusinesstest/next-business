@@ -5,7 +5,7 @@ import { resolveTheme, toStyleVars } from "../../lib/themes";
  * PacksRouter (unificado, robusto)
  * - No rompe si faltan variants o si el shape del spec varía (title/name, bullets.items, etc.)
  * - Normaliza módulos "auto" (hero/services/bullets/cards/contact) para que SIEMPRE rendericen contenido.
- * - Aplica theme vars de forma segura.
+ * - Aplica theme vars de forma segura (nunca rompe el build).
  */
 
 /* -----------------------------
@@ -53,7 +53,7 @@ function safeStr(v, fallback = "—") {
   return t || fallback;
 }
 
-// Normalizadores (aceptan title/name, items/bullets, etc.)
+// Normalizadores
 function normTitle(x) {
   if (!x) return "";
   return (x.title || x.name || "").toString().trim();
@@ -61,58 +61,51 @@ function normTitle(x) {
 
 function normDesc(x) {
   if (!x) return "";
-  return (x.description || x.desc || x.body || "").toString().trim();
+  return (x.description || x.desc || x.body || x.note || "").toString().trim();
 }
 
-function normItemsToNameDesc(arr) {
-  const a = Array.isArray(arr) ? arr : [];
-  return a
+function normItemsToNameDesc(arrOrObj) {
+  const raw = Array.isArray(arrOrObj)
+    ? arrOrObj
+    : Array.isArray(arrOrObj?.items)
+      ? arrOrObj.items
+      : [];
+
+  return raw
     .map((it) => {
       if (typeof it === "string") return { name: it, description: "" };
-      return {
-        name: normTitle(it),
-        description: normDesc(it),
-      };
+      return { name: normTitle(it), description: normDesc(it) };
     })
     .filter((it) => it.name);
 }
 
 function normBullets(arrOrObj) {
-  // Puede venir como:
-  // - bullets: ["A","B"]
-  // - items: [{title:"A"}, ...]
-  // - items: ["A","B"]
-  const raw =
-    Array.isArray(arrOrObj) ? arrOrObj : Array.isArray(arrOrObj?.items) ? arrOrObj.items : [];
+  const raw = Array.isArray(arrOrObj)
+    ? arrOrObj
+    : Array.isArray(arrOrObj?.bullets)
+      ? arrOrObj.bullets
+      : Array.isArray(arrOrObj?.items)
+        ? arrOrObj.items
+        : [];
+
   return raw
     .map((b) => (typeof b === "string" ? b : normTitle(b)))
     .map((s) => (s || "").trim())
     .filter(Boolean);
 }
 
-function normCards(arrOrObj) {
-  const raw =
-    Array.isArray(arrOrObj) ? arrOrObj : Array.isArray(arrOrObj?.items) ? arrOrObj.items : [];
-  return raw
-    .map((it) => {
-      if (typeof it === "string") return { name: it, description: "" };
-      const name = normTitle(it);
-      const description = normDesc(it);
-      return { name, description };
-    })
-    .filter((it) => it.name);
-}
-
 function normalizeHeroData(spec, data) {
-  const headline = data?.headline || spec?.business?.name || "Headline";
-  const subheadline =
-    data?.subheadline ||
-    (spec?.business?.sector && spec?.business?.location
-      ? `${spec.business.sector} · ${spec.business.location}`
-      : spec?.business?.sector || spec?.business?.location || "");
+  const headline = (data?.headline || spec?.business?.name || "Headline").toString().trim();
 
-  // En tu spec viene como strings: cta_primary / cta_secondary
-  // En router anterior esperábamos objetos primary_cta / secondary_cta
+  const subheadline =
+    (data?.subheadline ||
+      (spec?.business?.sector && spec?.business?.location
+        ? `${spec.business.sector} · ${spec.business.location}`
+        : spec?.business?.sector || spec?.business?.location || "")
+    ).toString().trim();
+
+  // En tu spec v2 viene como strings: cta_primary / cta_secondary
+  // Pero también soportamos legacy: primary_cta/secondary_cta
   const ctaPrimaryLabel = (data?.cta_primary || data?.primary_cta?.label || "").toString().trim();
   const ctaSecondaryLabel = (data?.cta_secondary || data?.secondary_cta?.label || "").toString().trim();
 
@@ -131,7 +124,7 @@ function safeResolveTheme(spec) {
   try {
     const t = resolveTheme(spec);
     return t && t.vars ? t : DEFAULT_THEME;
-  } catch (e) {
+  } catch {
     return DEFAULT_THEME;
   }
 }
@@ -140,7 +133,7 @@ function safeToStyleVars(vars) {
   try {
     const out = toStyleVars(vars);
     return out && typeof out === "object" ? out : {};
-  } catch (e) {
+  } catch {
     return {};
   }
 }
@@ -165,7 +158,9 @@ function SectionWrap({ id, title, kicker, children, className }) {
       }}
     >
       <Container>
-        {kicker ? <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">{kicker}</div> : null}
+        {kicker ? (
+          <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">{kicker}</div>
+        ) : null}
         {title ? <h2 className="mt-2 text-2xl font-semibold text-[var(--c-text)]">{title}</h2> : null}
         <div className={cx(title ? "mt-6" : "", "")}>{children}</div>
       </Container>
@@ -272,9 +267,9 @@ function HeaderTrust({ spec }) {
 
 function FooterSimple({ spec }) {
   const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
-  const type = spec?.business?.type || "unknown";
-  const pack = spec?.layout?.pack || "pack";
-  const personality = spec?.brand?.brand_personality || "personality";
+  const type = spec?.business?.type || "";
+  const pack = spec?.layout?.pack || "";
+  const personality = spec?.brand?.brand_personality || "";
 
   return (
     <footer className="border-t border-[var(--border)] bg-[var(--surface)]">
@@ -282,7 +277,7 @@ function FooterSimple({ spec }) {
         <div className="py-10 flex items-center justify-between gap-4 text-sm text-[var(--c-text)]/60">
           <div className="truncate">{brandName}</div>
           <div className="truncate">
-            {type} · {pack} · {personality}
+            {type || "unknown"} {pack ? `· ${pack}` : ""} {personality ? `· ${personality}` : ""}
           </div>
         </div>
       </Container>
@@ -295,7 +290,7 @@ function FooterSimple({ spec }) {
 ----------------------------- */
 
 function HeroProductMinimal({ spec, data }) {
-  const { headline, subheadline, primary, secondary } = normalizeHeroData(spec, data);
+  const hero = normalizeHeroData(spec, data);
   const contact = spec?.contact || {};
 
   return (
@@ -303,24 +298,26 @@ function HeroProductMinimal({ spec, data }) {
       <Container>
         <div className="grid gap-10 lg:grid-cols-2 items-start">
           <div>
-            <h1 className="text-4xl md:text-5xl font-semibold text-[var(--c-text)] leading-tight">{headline}</h1>
-            {subheadline ? <p className="mt-4 text-[var(--c-text)]/70 max-w-xl">{subheadline}</p> : null}
+            <h1 className="text-4xl md:text-5xl font-semibold text-[var(--c-text)] leading-tight">
+              {hero.headline}
+            </h1>
+            {hero.subheadline ? <p className="mt-4 text-[var(--c-text)]/70 max-w-xl">{hero.subheadline}</p> : null}
 
             <div className="mt-8 flex flex-wrap gap-3">
-              {primary ? (
+              {hero.primary ? (
                 <a
-                  href={primary.href || "#contact"}
+                  href={hero.primary.href || "#contact"}
                   className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[var(--c-accent)] text-white font-semibold hover:opacity-95"
                 >
-                  {primary.label || "Empezar"}
+                  {hero.primary.label}
                 </a>
               ) : null}
-              {secondary ? (
+              {hero.secondary ? (
                 <a
-                  href={secondary.href || "#services"}
+                  href={hero.secondary.href || "#services"}
                   className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95 font-semibold text-[var(--c-text)]"
                 >
-                  {secondary.label || "Ver más"}
+                  {hero.secondary.label}
                 </a>
               ) : null}
             </div>
@@ -352,11 +349,13 @@ function HeroProductMinimal({ spec, data }) {
   );
 }
 
+/**
+ * ✅ Hero split (composición B) — robusto con spec v2
+ */
 function HeroProductSplit({ spec, data }) {
-  const { headline, subheadline, primary, secondary } = normalizeHeroData(spec, data);
+  const hero = normalizeHeroData(spec, data);
   const contact = spec?.contact || {};
 
-  // Copy por defecto (si luego lo quieres, lo haremos semántico por sector)
   const kickerLeft = "Destacado";
   const titleLeft = "Compra con claridad";
   const descLeft = "Envío, devoluciones y soporte sin sorpresas.";
@@ -374,10 +373,10 @@ function HeroProductSplit({ spec, data }) {
 
             <div className="mt-8 flex flex-wrap gap-3">
               <a
-                href={secondary?.href || "#categories"}
+                href={(hero.secondary?.href || "#services").toString()}
                 className="inline-flex items-center justify-center px-5 py-2.5 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95 text-sm font-semibold text-[var(--c-text)]"
               >
-                {secondary?.label || "Devoluciones"}
+                {hero.secondary?.label || "Saber más"}
               </a>
             </div>
           </div>
@@ -385,15 +384,17 @@ function HeroProductSplit({ spec, data }) {
           <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-[var(--shadow)]">
             <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">Tienda online</div>
 
-            <h1 className="mt-3 text-3xl md:text-4xl font-semibold text-[var(--c-text)] leading-tight">{headline}</h1>
-            {subheadline ? <p className="mt-3 text-[var(--c-text)]/70">{subheadline}</p> : null}
+            <h1 className="mt-3 text-3xl md:text-4xl font-semibold text-[var(--c-text)] leading-tight">
+              {hero.headline}
+            </h1>
+            {hero.subheadline ? <p className="mt-3 text-[var(--c-text)]/70">{hero.subheadline}</p> : null}
 
             <div className="mt-6 flex flex-wrap gap-3">
               <a
-                href={primary?.href || "#categories"}
+                href={(hero.primary?.href || "#contact").toString()}
                 className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[var(--c-accent)] text-white font-semibold hover:opacity-95"
               >
-                {primary?.label || "Ver catálogo"}
+                {hero.primary?.label || "Ver catálogo"}
               </a>
             </div>
 
@@ -415,46 +416,44 @@ function HeroProductSplit({ spec, data }) {
 }
 
 function CardsGridMinimal({ data }) {
-  const title = data?.title || "Categorías";
-  const items = normCards(data);
+  const title = (data?.title || "Categorías").toString();
+  const items = normItemsToNameDesc(data);
 
   return (
     <SectionWrap id={data?.id || "categories"} title={title} kicker="Explora rápido">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it, idx) => (
-          <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:opacity-95 transition">
+          <div
+            key={idx}
+            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:opacity-95 transition"
+          >
             <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
             {it.description ? <div className="mt-1 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
             <div className="mt-3 text-sm text-[var(--c-accent)] font-semibold">Ver →</div>
           </div>
         ))}
-        {items.length === 0 ? (
-          <div className="text-sm text-[var(--c-text)]/60">
-            (Sin categorías definidas aún — se rellenará en generación premium)
-          </div>
-        ) : null}
       </div>
     </SectionWrap>
   );
 }
 
 function CardsScrollerMinimal({ data }) {
-  const title = data?.title || "Categorías";
-  const items = normCards(data);
+  const title = (data?.title || "Categorías").toString();
+  const items = normItemsToNameDesc(data);
 
   return (
     <SectionWrap id={data?.id || "categories"} title={title} kicker="Explora rápido">
       <div className="flex gap-4 overflow-x-auto pb-3 -mx-2 px-2">
         {items.map((it, idx) => (
-          <div key={idx} className="min-w-[240px] rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:opacity-95 transition">
+          <div
+            key={idx}
+            className="min-w-[240px] rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:opacity-95 transition"
+          >
             <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
             {it.description ? <div className="mt-1 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
             <div className="mt-3 text-sm text-[var(--c-accent)] font-semibold">Abrir →</div>
           </div>
         ))}
-        {items.length === 0 ? (
-          <div className="text-sm text-[var(--c-text)]/60">(Sin categorías definidas aún)</div>
-        ) : null}
       </div>
       <div className="h-1 rounded-full bg-[var(--border)] mt-3" />
     </SectionWrap>
@@ -462,7 +461,7 @@ function CardsScrollerMinimal({ data }) {
 }
 
 function BulletsInlineMinimal({ data }) {
-  const title = data?.title || "Por qué elegirnos";
+  const title = (data?.title || "Por qué elegirnos").toString();
   const bullets = normBullets(data);
 
   return (
@@ -474,16 +473,13 @@ function BulletsInlineMinimal({ data }) {
             <span>{b}</span>
           </div>
         ))}
-        {bullets.length === 0 ? (
-          <div className="text-sm text-[var(--c-text)]/60">(Sin bullets definidos aún)</div>
-        ) : null}
       </div>
     </SectionWrap>
   );
 }
 
 function BenefitsCardsMinimal({ data }) {
-  const title = data?.title || "Por qué elegirnos";
+  const title = (data?.title || "Por qué elegirnos").toString();
   const bullets = normBullets(data);
 
   return (
@@ -494,17 +490,14 @@ function BenefitsCardsMinimal({ data }) {
             <div className="text-sm font-semibold text-[var(--c-text)]">{b}</div>
           </div>
         ))}
-        {bullets.length === 0 ? (
-          <div className="text-sm text-[var(--c-text)]/60">(Sin bullets definidos aún)</div>
-        ) : null}
       </div>
     </SectionWrap>
   );
 }
 
 function ServicesGridAuto({ data }) {
-  const title = data?.title || "Servicios";
-  const items = normItemsToNameDesc(data?.items);
+  const title = (data?.title || "Servicios").toString();
+  const items = normItemsToNameDesc(data);
 
   return (
     <SectionWrap id={data?.id || "services"} title={title}>
@@ -515,17 +508,15 @@ function ServicesGridAuto({ data }) {
             {it.description ? <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
           </div>
         ))}
-        {items.length === 0 ? (
-          <div className="text-sm text-[var(--c-text)]/60">(Sin servicios definidos aún)</div>
-        ) : null}
       </div>
     </SectionWrap>
   );
 }
 
 function TextAuto({ data }) {
-  const title = data?.title || "Sobre la empresa";
-  const body = (data?.body || "").toString();
+  const title = (data?.title || "Sobre nosotros").toString();
+  const body = (data?.body || data?.note || "").toString();
+
   return (
     <SectionWrap id={data?.id || "about"} title={title}>
       <div className="text-[var(--c-text)]/80 leading-relaxed max-w-3xl text-sm">{body}</div>
@@ -534,16 +525,15 @@ function TextAuto({ data }) {
 }
 
 function ContactAuto({ spec, data }) {
-  const title = data?.title || "Contacto";
-  // En tu spec el texto viene como note, no body
-  const body = (data?.note || data?.body || "").toString();
+  const title = (data?.title || "Contacto").toString();
+  const body = (data?.body || data?.note || "").toString();
   const contact = spec?.contact || {};
 
   return (
     <SectionWrap id="contact" title={title}>
       <div className="grid gap-6 lg:grid-cols-2 items-start">
         <div>
-          {body ? <p className="text-sm text-[var(--c-text)]/70 max-w-xl">{body}</p> : null}
+          <p className="text-sm text-[var(--c-text)]/70 max-w-xl">{body}</p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -566,8 +556,8 @@ function ContactAuto({ spec, data }) {
 }
 
 function ContactSplitMinimal({ spec, data }) {
-  const title = data?.title || "Contacto";
-  const body = (data?.note || data?.body || "Escríbenos para dudas, envíos, devoluciones o disponibilidad.").toString();
+  const title = (data?.title || "Contacto").toString();
+  const body = (data?.body || data?.note || "Escríbenos y te respondemos en breve.").toString();
   const contact = spec?.contact || {};
 
   return (
@@ -597,8 +587,8 @@ function ContactSplitMinimal({ spec, data }) {
 }
 
 function ContactCenterMinimal({ spec, data }) {
-  const title = data?.title || "Contacto";
-  const body = (data?.note || data?.body || "Escríbenos para dudas, envíos, devoluciones o disponibilidad.").toString();
+  const title = (data?.title || "Contacto").toString();
+  const body = (data?.body || data?.note || "Escríbenos y te respondemos en breve.").toString();
   const contact = spec?.contact || {};
 
   return (
@@ -646,14 +636,16 @@ const SECTION_MAP = {
   benefits_inline_min_v1: BulletsInlineMinimal,
   benefits_cards_min_v1: BenefitsCardsMinimal,
 
+  // generic packs
   services_grid_auto_v1: ServicesGridAuto,
   text_auto_v1: TextAuto,
 
+  // contact
   contact_auto_v1: ContactAuto,
   contact_split_min_v1: ContactSplitMinimal,
   contact_center_min_v1: ContactCenterMinimal,
 
-  // bridge (compat con tu spec actual)
+  // bridge (legacy names)
   cards_auto_v1: CardsGridMinimal,
   bullets_auto_v1: BulletsInlineMinimal,
 };
@@ -702,7 +694,7 @@ export default function PacksRouter({ spec }) {
             <div className="text-sm text-red-600">
               No hay renderer para variant <b>{s.variant}</b>
             </div>
-            <pre className="mt-3 text-xs bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 overflow-auto">
+            <pre className="mt-3 text-xs bg-gray-50 border rounded-xl p-4 overflow-auto">
               {JSON.stringify({ module: s.module, variant: s.variant, props_ref: s.props_ref, data }, null, 2)}
             </pre>
           </SectionWrap>
