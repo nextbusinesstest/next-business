@@ -1,4 +1,8 @@
 import { generateSiteV2 } from "../../lib/spec/v2/generate-site";
+import {
+  autoPickPersonality,
+  personalityPreset,
+} from "../../lib/spec/v2/auto_personality";
 
 function safeTrim(v) {
   return (v ?? "").toString().trim();
@@ -139,6 +143,60 @@ function rateLimit(req, res) {
   return true;
 }
 
+/**
+ * Aplica personalidad automática al site_spec ya generado (sin romper packs existentes).
+ * - deterministic (no cambia si repites el mismo negocio)
+ * - ajusta brand_expression + design_tokens
+ * - define header/footer si no existen
+ */
+function applyAutoPersonality(site_spec) {
+  if (!site_spec || typeof site_spec !== "object") return site_spec;
+
+  const site_id =
+    site_spec?.meta?.site_id ||
+    site_spec?.business?.slug ||
+    site_spec?.business?.name ||
+    "site";
+
+  const picked = autoPickPersonality({
+    site_id,
+    business: site_spec?.business,
+    strategy: site_spec?.strategy,
+  });
+
+  const preset = personalityPreset(picked);
+
+  site_spec.brand = site_spec.brand || {};
+
+  // personalidad + expresión
+  site_spec.brand.brand_personality = picked;
+  site_spec.brand.brand_expression = {
+    ...(site_spec.brand.brand_expression || {}),
+    ...(preset.brand_expression || {}),
+  };
+
+  // tokens (colores)
+  site_spec.brand.design_tokens = site_spec.brand.design_tokens || {};
+  site_spec.brand.design_tokens.colors = {
+    ...(site_spec.brand.design_tokens.colors || {}),
+    ...(preset.design_tokens?.colors || {}),
+  };
+
+  // layout variants mínimos (sin forzar pack ni secciones)
+  site_spec.layout = site_spec.layout || {};
+  if (!site_spec.layout.header_variant) {
+    site_spec.layout.header_variant =
+      picked === "trust_authority" || picked === "enterprise_solid"
+        ? "header_trust_v1"
+        : "header_minimal_v1";
+  }
+  if (!site_spec.layout.footer_variant) {
+    site_spec.layout.footer_variant = "footer_simple_v1";
+  }
+
+  return site_spec;
+}
+
 export default async function handler(req, res) {
   // Solo POST
   if (req.method !== "POST") {
@@ -171,7 +229,9 @@ export default async function handler(req, res) {
       return;
     }
     if (website_goal === "other" && !website_goal_detail) {
-      res.status(400).json({ error: "Goal detail is required for 'Other'." });
+      res
+        .status(400)
+        .json({ error: "Goal detail is required for 'Other'." });
       return;
     }
 
@@ -198,7 +258,10 @@ export default async function handler(req, res) {
       goal,
     };
 
-    const site_spec = await generateSiteV2(client_brief);
+    let site_spec = await generateSiteV2(client_brief);
+
+    // ✅ NUEVO: aplica personalidad automática (premium)
+    site_spec = applyAutoPersonality(site_spec);
 
     res.status(200).json(site_spec);
   } catch (err) {
