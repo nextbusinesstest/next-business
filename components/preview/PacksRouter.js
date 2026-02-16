@@ -496,15 +496,28 @@ const HERO_MAP = {
 };
 
 const SECTION_MAP = {
+  // ✅ Bloque 3 (Trust/Proof)
   steps_auto_v1: StepsAuto,
 
+  // base
   services_grid_auto_v1: ServicesGridAuto,
   text_auto_v1: TextAuto,
   contact_auto_v1: ContactAuto,
 
-  // bridge
+  // bridge legacy->auto
   cards_auto_v1: CardsGridMinimal,
   bullets_auto_v1: BulletsInlineMinimal,
+
+  // ✅ FIX MINIMO ECOMMERCE: mapear variantes nuevas a componentes existentes
+  // (así NO sale fallback rojo aunque el spec pida variants ecommerce)
+  categories_grid_min_v1: CardsGridMinimal,
+  categories_scroller_min_v1: CardsGridMinimal,   // fallback a grid por ahora
+
+  benefits_inline_min_v1: BulletsInlineMinimal,
+  benefits_cards_min_v1: BulletsInlineMinimal,    // fallback a inline por ahora
+
+  contact_split_min_v1: ContactAuto,              // fallback al contact base
+  contact_center_min_v1: ContactAuto,             // fallback al contact base
 };
 
 /* -----------------------------
