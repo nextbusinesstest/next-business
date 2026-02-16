@@ -1,10 +1,11 @@
+// components/preview/PacksRouter.js
 import { useMemo } from "react";
 import { resolveTheme, toStyleVars } from "../../lib/themes";
 
 /**
  * PacksRouter (unificado, robusto)
  * - No rompe si faltan variants o si el shape del spec varía (title/name, bullets.items, etc.)
- * - Normaliza módulos "auto" (hero/services/bullets/cards/contact) para que SIEMPRE rendericen contenido.
+ * - Normaliza módulos "auto" (hero/services/bullets/cards/contact/steps) para que SIEMPRE rendericen contenido.
  * - Aplica theme vars de forma segura (nunca rompe el build).
  */
 
@@ -350,68 +351,36 @@ function HeroProductMinimal({ spec, data }) {
 }
 
 /**
- * ✅ Hero split (composición B) — robusto con spec v2
+ * ✅ StepsAuto — robusto (acepta strings o {title/name, description/desc})
  */
-function HeroProductSplit({ spec, data }) {
-  const hero = normalizeHeroData(spec, data);
-  const contact = spec?.contact || {};
+function StepsAuto({ data }) {
+  const title = (data?.title || "Cómo funciona").toString();
+  const rawItems = Array.isArray(data?.items) ? data.items : [];
 
-  const kickerLeft = "Destacado";
-  const titleLeft = "Compra con claridad";
-  const descLeft = "Envío, devoluciones y soporte sin sorpresas.";
+  const items = rawItems
+    .map((it) => {
+      if (typeof it === "string") return { title: it, description: "" };
+      return {
+        title: normTitle(it),
+        description: normDesc(it),
+      };
+    })
+    .filter((it) => it.title);
 
   return (
-    <section className="py-16">
-      <Container>
-        <div className="grid gap-6 lg:grid-cols-2 items-stretch">
-          <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-8 flex flex-col justify-between min-h-[260px]">
-            <div>
-              <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">{kickerLeft}</div>
-              <h2 className="mt-4 text-xl font-semibold text-[var(--c-text)]">{titleLeft}</h2>
-              <p className="mt-2 text-sm text-[var(--c-text)]/70 max-w-md">{descLeft}</p>
-            </div>
-
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a
-                href={(hero.secondary?.href || "#services").toString()}
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95 text-sm font-semibold text-[var(--c-text)]"
-              >
-                {hero.secondary?.label || "Saber más"}
-              </a>
-            </div>
+    <SectionWrap id={data?.id || "how"} title={title} kicker="Proceso">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((it, idx) => (
+          <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-xs text-[var(--c-text)]/60">Paso {idx + 1}</div>
+            <div className="mt-1 font-semibold text-[var(--c-text)]">{it.title}</div>
+            {it.description ? (
+              <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div>
+            ) : null}
           </div>
-
-          <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-[var(--shadow)]">
-            <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">Tienda online</div>
-
-            <h1 className="mt-3 text-3xl md:text-4xl font-semibold text-[var(--c-text)] leading-tight">
-              {hero.headline}
-            </h1>
-            {hero.subheadline ? <p className="mt-3 text-[var(--c-text)]/70">{hero.subheadline}</p> : null}
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href={(hero.primary?.href || "#contact").toString()}
-                className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[var(--c-accent)] text-white font-semibold hover:opacity-95"
-              >
-                {hero.primary?.label || "Ver catálogo"}
-              </a>
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-                <div className="text-xs text-[var(--c-text)]/60">Teléfono</div>
-                <div className="mt-1 text-sm text-[var(--c-text)]">{safeStr(contact.phone)}</div>
-              </div>
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-                <div className="text-xs text-[var(--c-text)]/60">Email</div>
-                <div className="mt-1 text-sm text-[var(--c-text)]">{safeStr(contact.email)}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Container>
-    </section>
+        ))}
+      </div>
+    </SectionWrap>
   );
 }
 
@@ -437,29 +406,6 @@ function CardsGridMinimal({ data }) {
   );
 }
 
-function CardsScrollerMinimal({ data }) {
-  const title = (data?.title || "Categorías").toString();
-  const items = normItemsToNameDesc(data);
-
-  return (
-    <SectionWrap id={data?.id || "categories"} title={title} kicker="Explora rápido">
-      <div className="flex gap-4 overflow-x-auto pb-3 -mx-2 px-2">
-        {items.map((it, idx) => (
-          <div
-            key={idx}
-            className="min-w-[240px] rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:opacity-95 transition"
-          >
-            <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
-            {it.description ? <div className="mt-1 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
-            <div className="mt-3 text-sm text-[var(--c-accent)] font-semibold">Abrir →</div>
-          </div>
-        ))}
-      </div>
-      <div className="h-1 rounded-full bg-[var(--border)] mt-3" />
-    </SectionWrap>
-  );
-}
-
 function BulletsInlineMinimal({ data }) {
   const title = (data?.title || "Por qué elegirnos").toString();
   const bullets = normBullets(data);
@@ -471,23 +417,6 @@ function BulletsInlineMinimal({ data }) {
           <div key={idx} className="text-sm text-[var(--c-text)]/80 flex gap-2">
             <span className="mt-1 inline-block w-2 h-2 rounded-full bg-[var(--c-accent)] shrink-0" />
             <span>{b}</span>
-          </div>
-        ))}
-      </div>
-    </SectionWrap>
-  );
-}
-
-function BenefitsCardsMinimal({ data }) {
-  const title = (data?.title || "Por qué elegirnos").toString();
-  const bullets = normBullets(data);
-
-  return (
-    <SectionWrap id={data?.id || "benefits"} title={title} kicker="Condiciones claras">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {bullets.map((b, idx) => (
-          <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <div className="text-sm font-semibold text-[var(--c-text)]">{b}</div>
           </div>
         ))}
       </div>
@@ -555,62 +484,6 @@ function ContactAuto({ spec, data }) {
   );
 }
 
-function ContactSplitMinimal({ spec, data }) {
-  const title = (data?.title || "Contacto").toString();
-  const body = (data?.body || data?.note || "Escríbenos y te respondemos en breve.").toString();
-  const contact = spec?.contact || {};
-
-  return (
-    <SectionWrap id="contact" title={title}>
-      <div className="grid gap-8 lg:grid-cols-2 items-start">
-        <div>
-          <p className="text-sm text-[var(--c-text)]/70 max-w-xl">{body}</p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <div className="text-xs text-[var(--c-text)]/60">Teléfono</div>
-            <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.phone)}</div>
-          </div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <div className="text-xs text-[var(--c-text)]/60">Email</div>
-            <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.email)}</div>
-          </div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <div className="text-xs text-[var(--c-text)]/60">Dirección</div>
-            <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.address)}</div>
-          </div>
-        </div>
-      </div>
-    </SectionWrap>
-  );
-}
-
-function ContactCenterMinimal({ spec, data }) {
-  const title = (data?.title || "Contacto").toString();
-  const body = (data?.body || data?.note || "Escríbenos y te respondemos en breve.").toString();
-  const contact = spec?.contact || {};
-
-  return (
-    <SectionWrap id="contact" title={title} kicker="Hablemos">
-      <div className="max-w-2xl mx-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
-        <p className="text-sm text-[var(--c-text)]/70">{body}</p>
-
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          <div className="rounded-full border border-[var(--border)] px-4 py-2 text-sm text-[var(--c-text)]">
-            {safeStr(contact.phone)}
-          </div>
-          <div className="rounded-full border border-[var(--border)] px-4 py-2 text-sm text-[var(--c-text)]">
-            {safeStr(contact.email)}
-          </div>
-        </div>
-
-        {contact.address ? <div className="mt-4 text-xs text-[var(--c-text)]/60">{contact.address}</div> : null}
-      </div>
-    </SectionWrap>
-  );
-}
-
 /* -----------------------------
   Variant maps
 ----------------------------- */
@@ -626,27 +499,16 @@ const FOOTER_MAP = {
 
 const HERO_MAP = {
   hero_product_minimal_v1: HeroProductMinimal,
-  hero_product_split_v1: HeroProductSplit,
 };
 
 const SECTION_MAP = {
-  // ecommerce + base
-  categories_grid_min_v1: CardsGridMinimal,
-  categories_scroller_min_v1: CardsScrollerMinimal,
-  benefits_inline_min_v1: BulletsInlineMinimal,
-  benefits_cards_min_v1: BenefitsCardsMinimal,
-  steps_auto_v1: StepsAuto,
+  steps_auto_v1: StepsAuto, // ✅ nuevo
 
-  // generic packs
   services_grid_auto_v1: ServicesGridAuto,
   text_auto_v1: TextAuto,
-
-  // contact
   contact_auto_v1: ContactAuto,
-  contact_split_min_v1: ContactSplitMinimal,
-  contact_center_min_v1: ContactCenterMinimal,
 
-  // bridge (legacy names)
+  // bridge
   cards_auto_v1: CardsGridMinimal,
   bullets_auto_v1: BulletsInlineMinimal,
 };
@@ -654,25 +516,6 @@ const SECTION_MAP = {
 /* -----------------------------
   Main renderer
 ----------------------------- */
-function StepsAuto({ data }) {
-  const title = data?.title || "Cómo funciona";
-  const items = Array.isArray(data?.items) ? data.items : [];
-  return (
-    <SectionWrap id={data?.id || "how"} title={title} kicker="Proceso">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((it, idx) => (
-          <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="text-xs text-gray-500">Paso {idx + 1}</div>
-            <div className="mt-1 font-semibold text-gray-900">{it.title}</div>
-            {it.description ? (
-              <div className="mt-2 text-sm text-gray-600">{it.description}</div>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </SectionWrap>
-  );
-}
 
 export default function PacksRouter({ spec }) {
   const headerKey = spec?.layout?.header_variant || "header_minimal_v1";
