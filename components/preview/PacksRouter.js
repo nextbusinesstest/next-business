@@ -635,6 +635,7 @@ const SECTION_MAP = {
   categories_scroller_min_v1: CardsScrollerMinimal,
   benefits_inline_min_v1: BulletsInlineMinimal,
   benefits_cards_min_v1: BenefitsCardsMinimal,
+  steps_auto_v1: StepsAuto,
 
   // generic packs
   services_grid_auto_v1: ServicesGridAuto,
@@ -653,6 +654,25 @@ const SECTION_MAP = {
 /* -----------------------------
   Main renderer
 ----------------------------- */
+function StepsAuto({ data }) {
+  const title = data?.title || "Cómo funciona";
+  const items = Array.isArray(data?.items) ? data.items : [];
+  return (
+    <SectionWrap id={data?.id || "how"} title={title} kicker="Proceso">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((it, idx) => (
+          <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="text-xs text-gray-500">Paso {idx + 1}</div>
+            <div className="mt-1 font-semibold text-gray-900">{it.title}</div>
+            {it.description ? (
+              <div className="mt-2 text-sm text-gray-600">{it.description}</div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </SectionWrap>
+  );
+}
 
 export default function PacksRouter({ spec }) {
   const headerKey = spec?.layout?.header_variant || "header_minimal_v1";
