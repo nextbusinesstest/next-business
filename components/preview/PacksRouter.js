@@ -1,4 +1,3 @@
-// components/preview/PacksRouter.js
 import { useMemo } from "react";
 import { resolveTheme, toStyleVars } from "../../lib/themes";
 
@@ -360,10 +359,7 @@ function StepsAuto({ data }) {
   const items = rawItems
     .map((it) => {
       if (typeof it === "string") return { title: it, description: "" };
-      return {
-        title: normTitle(it),
-        description: normDesc(it),
-      };
+      return { title: normTitle(it), description: normDesc(it) };
     })
     .filter((it) => it.title);
 
@@ -374,9 +370,7 @@ function StepsAuto({ data }) {
           <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="text-xs text-[var(--c-text)]/60">Paso {idx + 1}</div>
             <div className="mt-1 font-semibold text-[var(--c-text)]">{it.title}</div>
-            {it.description ? (
-              <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div>
-            ) : null}
+            {it.description ? <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
           </div>
         ))}
       </div>
@@ -502,7 +496,7 @@ const HERO_MAP = {
 };
 
 const SECTION_MAP = {
-  steps_auto_v1: StepsAuto, // ✅ nuevo
+  steps_auto_v1: StepsAuto,
 
   services_grid_auto_v1: ServicesGridAuto,
   text_auto_v1: TextAuto,
@@ -539,19 +533,14 @@ export default function PacksRouter({ spec }) {
       {sections.map((s, idx) => {
         const data = getByRef(spec, s.props_ref);
 
-        // HERO
         if (s.module === "hero") {
           const Hero = HERO_MAP[s.variant] || HeroProductMinimal;
           return <Hero key={idx} spec={spec} data={data} />;
         }
 
-        // SECTIONS
         const Comp = SECTION_MAP[s.variant];
-        if (Comp) {
-          return <Comp key={idx} spec={spec} data={data} />;
-        }
+        if (Comp) return <Comp key={idx} spec={spec} data={data} />;
 
-        // fallback debug visible (no rompe build)
         return (
           <SectionWrap key={idx} title={`Módulo no soportado: ${cap(s.module)}`}>
             <div className="text-sm text-red-600">
