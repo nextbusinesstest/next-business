@@ -45,6 +45,45 @@ function runValidations(spec) {
   ];
 }
 
+function buildValidationBundle(spec) {
+  const sections = spec?.layout?.pages?.home?.sections || [];
+  const modules = spec?.modules || {};
+
+  const pick = (k) => (modules?.[k] ? modules[k] : undefined);
+  const pickedModules = {
+    hero_auto: pick("hero_auto"),
+    services_auto: pick("services_auto"),
+    cards_auto: pick("cards_auto"),
+    bullets_auto: pick("bullets_auto"),
+    steps_auto: pick("steps_auto"),
+    text_auto: pick("text_auto"),
+    contact_auto: pick("contact_auto"),
+  };
+
+  return {
+    meta: spec?.meta,
+    business: spec?.business,
+    strategy: spec?.strategy,
+    brand: {
+      brand_personality: spec?.brand?.brand_personality,
+      brand_expression: spec?.brand?.brand_expression,
+      design_tokens: spec?.brand?.design_tokens,
+    },
+    layout: {
+      pack: spec?.layout?.pack,
+      header_variant: spec?.layout?.header_variant,
+      footer_variant: spec?.layout?.footer_variant,
+      sections: sections.map((s) => ({
+        module: s.module,
+        variant: s.variant,
+        props_ref: s.props_ref,
+      })),
+    },
+    modules: pickedModules,
+    validations: runValidations(spec),
+  };
+}
+
 export default function InternalLab() {
   const [presetId, setPresetId] = useState(PRESETS[0]?.id || "");
   const activePreset = useMemo(() => PRESETS.find((p) => p.id === presetId) || PRESETS[0], [presetId]);
@@ -110,6 +149,13 @@ export default function InternalLab() {
     if (!lastSpec) return;
     navigator.clipboard?.writeText(pretty(lastSpec));
   }
+
+  function copyValidationBundle() {
+    if (!lastSpec) return;
+    const bundle = buildValidationBundle(lastSpec);
+    navigator.clipboard?.writeText(JSON.stringify(bundle, null, 2));
+  }
+
 
   function downloadSpec() {
     if (!lastSpec) return;
@@ -221,6 +267,14 @@ export default function InternalLab() {
                 Clear local spec
               </button>
             </div>
+                  
+            <button
+              onClick={copyValidationBundle}
+              disabled={!lastSpec}
+              className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold disabled:opacity-50"
+            >
+              Copy validation bundle
+            </button>
 
             {lastError ? (
               <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
