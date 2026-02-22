@@ -3,7 +3,8 @@ import { resolveTheme, toStyleVars } from "../../lib/themes";
 
 /**
  * PacksRouter (unificado, robusto)
- * - ✅ Bloque 4.3: variants nuevas para SaaS y Booking
+ * - ✅ Bloque 4.4: Ecommerce premium renderers reales:
+ *   hero_product_split_v1, categories_scroller_min_v1, benefits_cards_min_v1, contact_center_min_v1
  */
 
 const DEFAULT_THEME = {
@@ -99,13 +100,8 @@ function normalizeHeroData(spec, data) {
   const ctaPrimaryLabel = (data?.cta_primary || data?.primary_cta?.label || "").toString().trim();
   const ctaSecondaryLabel = (data?.cta_secondary || data?.secondary_cta?.label || "").toString().trim();
 
-  const primary = ctaPrimaryLabel
-    ? { label: ctaPrimaryLabel, href: data?.primary_cta?.href || "#contact" }
-    : null;
-
-  const secondary = ctaSecondaryLabel
-    ? { label: ctaSecondaryLabel, href: data?.secondary_cta?.href || "#services" }
-    : null;
+  const primary = ctaPrimaryLabel ? { label: ctaPrimaryLabel, href: "#categories" } : null;
+  const secondary = ctaSecondaryLabel ? { label: ctaSecondaryLabel, href: "#benefits" } : null;
 
   return { headline, subheadline, primary, secondary };
 }
@@ -148,6 +144,15 @@ function applyArchetypeOverrides(vars, archetype) {
     v["--shadow"] = "0_18px_55px_rgba(15,23,42,0.10)";
     v["--r-sm"] = "16px";
     v["--r-md"] = "20px";
+    v["--r-lg"] = "28px";
+  }
+
+  // ✅ Ecommerce premium: un pelín más “producto”
+  if (archetype === "ecommerce_premium_v1") {
+    v["--section-py"] = "56px";
+    v["--shadow"] = "0_22px_70px_rgba(2,6,23,0.18)";
+    v["--r-sm"] = "14px";
+    v["--r-md"] = "18px";
     v["--r-lg"] = "28px";
   }
 
@@ -293,7 +298,6 @@ function FooterSimple({ spec }) {
 
 function HeroProductMinimal({ spec, data }) {
   const hero = normalizeHeroData(spec, data);
-  const contact = spec?.contact || {};
 
   return (
     <section className="py-16">
@@ -326,23 +330,80 @@ function HeroProductMinimal({ spec, data }) {
           </div>
 
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[var(--r-lg)] p-6 shadow-[var(--shadow)]">
-            <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">Resumen</div>
-            <div className="mt-2 text-lg font-semibold text-[var(--c-text)]">{spec?.business?.name || "Preview"}</div>
+            <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">Highlights</div>
+            <div className="mt-2 text-lg font-semibold text-[var(--c-text)]">
+              Compra segura y rápida
+            </div>
+            <div className="mt-2 text-sm text-[var(--c-text)]/70">
+              Envío, devoluciones y soporte con políticas claras.
+            </div>
+          </div>
+        </div>
+      </Container>
+    </section>
+  );
+}
 
-            <div className="mt-6 space-y-3">
-              <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-4">
-                <div className="text-xs text-[var(--c-text)]/60">Contacto</div>
-                <div className="mt-1 text-sm text-[var(--c-text)]">
-                  {safeStr(contact.phone)}
-                  <br />
-                  {safeStr(contact.email)}
-                </div>
-              </div>
+// ✅ Ecommerce premium hero split
+function HeroProductSplit({ spec, data }) {
+  const hero = normalizeHeroData(spec, data);
 
-              <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-4">
-                <div className="text-xs text-[var(--c-text)]/60">Dirección</div>
-                <div className="mt-1 text-sm text-[var(--c-text)]">{safeStr(contact.address)}</div>
-              </div>
+  const kicker = "Drops / Colecciones";
+  const titleLeft = "Compra con claridad";
+  const descLeft = "Envío, cambios y soporte sin sorpresas. Stock limitado cuando aplica.";
+
+  return (
+    <section className="py-16">
+      <Container>
+        <div className="grid gap-6 lg:grid-cols-2 items-stretch">
+          <div className="rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-8 flex flex-col justify-between">
+            <div>
+              <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">{kicker}</div>
+              <h2 className="mt-4 text-xl font-semibold text-[var(--c-text)]">{titleLeft}</h2>
+              <p className="mt-2 text-sm text-[var(--c-text)]/70">{descLeft}</p>
+            </div>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <a
+                href="#benefits"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95 text-sm font-semibold"
+              >
+                Condiciones
+              </a>
+              <a
+                href="#contact"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-[var(--c-accent)] text-white hover:opacity-95 text-sm font-semibold"
+              >
+                Dudas
+              </a>
+            </div>
+          </div>
+
+          <div className="rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--surface)] p-8 shadow-[var(--shadow)]">
+            <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">Tienda online</div>
+
+            <h1 className="mt-3 text-3xl md:text-4xl font-semibold text-[var(--c-text)] leading-tight">
+              {hero.headline}
+            </h1>
+            {hero.subheadline ? <p className="mt-3 text-[var(--c-text)]/70">{hero.subheadline}</p> : null}
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              {hero.primary ? (
+                <a
+                  href="#categories"
+                  className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[var(--c-accent)] text-white font-semibold hover:opacity-95"
+                >
+                  {hero.primary.label}
+                </a>
+              ) : null}
+              {hero.secondary ? (
+                <a
+                  href="#benefits"
+                  className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95 font-semibold"
+                >
+                  {hero.secondary.label}
+                </a>
+              ) : null}
             </div>
           </div>
         </div>
@@ -381,7 +442,7 @@ function HeroSaasSplit({ spec, data }) {
               <div className="mt-8 flex flex-wrap gap-3">
                 {hero.primary ? (
                   <a
-                    href={hero.primary.href || "#contact"}
+                    href="#contact"
                     className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[var(--c-accent)] text-white font-semibold hover:opacity-95"
                   >
                     {hero.primary.label}
@@ -389,7 +450,7 @@ function HeroSaasSplit({ spec, data }) {
                 ) : null}
                 {hero.secondary ? (
                   <a
-                    href={hero.secondary.href || "#services"}
+                    href="#services"
                     className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95 font-semibold text-[var(--c-text)]"
                   >
                     {hero.secondary.label}
@@ -507,11 +568,8 @@ function FaqAuto({ data }) {
   );
 }
 
-/* -----------------------------
-  ✅ BLOQUE 4.3: NUEVAS VARIANTS
------------------------------ */
+/* Bloque 4.3 variants (SaaS + Booking) */
 
-// SaaS bullets: checks compactos
 function BulletsSaasChecks({ data }) {
   const title = (data?.title || "Por qué elegirnos").toString();
   const bullets = normBullets(data);
@@ -532,7 +590,6 @@ function BulletsSaasChecks({ data }) {
   );
 }
 
-// Booking bullets: inline suave tipo “chips”
 function BulletsTrustInline({ data }) {
   const title = (data?.title || "Por qué elegirnos").toString();
   const bullets = normBullets(data);
@@ -553,7 +610,6 @@ function BulletsTrustInline({ data }) {
   );
 }
 
-// SaaS services: “módulos” más producto
 function ServicesGridSaas({ data }) {
   const title = (data?.title || "Soluciones").toString();
   const items = normItemsToNameDesc(data);
@@ -579,7 +635,6 @@ function ServicesGridSaas({ data }) {
   );
 }
 
-// Booking services: cards más suaves
 function ServicesGridBooking({ data }) {
   const title = (data?.title || "Tratamientos y servicios").toString();
   const items = normItemsToNameDesc(data);
@@ -606,9 +661,76 @@ function ServicesGridBooking({ data }) {
   );
 }
 
-/* -----------------------------
-  Otros módulos (base)
------------------------------ */
+/* ✅ Bloque 4.4 Ecommerce premium renderers */
+
+function CardsScrollerMinimal({ data }) {
+  const title = (data?.title || "Categorías").toString();
+  const items = normItemsToNameDesc(data);
+
+  return (
+    <SectionWrap id="categories" title={title} kicker="Explora rápido">
+      <div className="flex gap-4 overflow-x-auto pb-3 -mx-2 px-2">
+        {items.map((it, idx) => (
+          <div
+            key={idx}
+            className="min-w-[260px] rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow)]"
+          >
+            <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
+            {it.description ? <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
+            <div className="mt-4 text-sm text-[var(--c-accent)] font-semibold">Abrir →</div>
+          </div>
+        ))}
+      </div>
+      <div className="h-1 rounded-full bg-[var(--border)] mt-3" />
+    </SectionWrap>
+  );
+}
+
+function BenefitsCardsMinimal({ data }) {
+  const title = (data?.title || "Por qué elegirnos").toString();
+  const bullets = normBullets(data);
+
+  return (
+    <SectionWrap id="benefits" title={title} kicker="Condiciones claras">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {bullets.map((b, idx) => (
+          <div key={idx} className="rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow)]">
+            <div className="text-sm font-semibold text-[var(--c-text)]">{b}</div>
+          </div>
+        ))}
+      </div>
+    </SectionWrap>
+  );
+}
+
+function ContactCenterMinimal({ spec, data }) {
+  const title = (data?.title || "Contacto").toString();
+  const body = (data?.body || data?.note || "Escríbenos y te respondemos en breve.").toString();
+  const contact = spec?.contact || {};
+
+  return (
+    <SectionWrap id="contact" title={title} kicker="Hablemos">
+      <div className="max-w-2xl mx-auto rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--surface)] p-8 text-center shadow-[var(--shadow)]">
+        <p className="text-sm text-[var(--c-text)]/75">{body}</p>
+
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <div className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-sm">
+            {safeStr(contact.phone)}
+          </div>
+          <div className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-sm">
+            {safeStr(contact.email)}
+          </div>
+        </div>
+
+        {contact.address ? (
+          <div className="mt-4 text-xs text-[var(--c-text)]/60">{contact.address}</div>
+        ) : null}
+      </div>
+    </SectionWrap>
+  );
+}
+
+/* Base */
 
 function CardsGridMinimal({ data }) {
   const title = (data?.title || "Categorías").toString();
@@ -720,6 +842,7 @@ const FOOTER_MAP = {
 
 const HERO_MAP = {
   hero_product_minimal_v1: HeroProductMinimal,
+  hero_product_split_v1: HeroProductSplit, // ✅ ecommerce premium
   hero_saas_split_v1: HeroSaasSplit,
 };
 
@@ -728,11 +851,16 @@ const SECTION_MAP = {
   testimonials_auto_v1: TestimonialsAuto,
   faq_auto_v1: FaqAuto,
 
-  // ✅ Bloque 4.3
+  // Bloque 4.3
   bullets_saas_checks_v1: BulletsSaasChecks,
   bullets_trust_inline_v1: BulletsTrustInline,
   services_grid_saas_v1: ServicesGridSaas,
   services_grid_booking_v1: ServicesGridBooking,
+
+  // ✅ Bloque 4.4 ecommerce premium
+  categories_scroller_min_v1: CardsScrollerMinimal,
+  benefits_cards_min_v1: BenefitsCardsMinimal,
+  contact_center_min_v1: ContactCenterMinimal,
 
   // base
   services_grid_auto_v1: ServicesGridAuto,
@@ -741,13 +869,10 @@ const SECTION_MAP = {
   cards_auto_v1: CardsGridMinimal,
   bullets_auto_v1: BulletsInlineMinimal,
 
-  // fallbacks ecommerce
+  // fallbacks ecommerce (si algún spec antiguo los pide)
   categories_grid_min_v1: CardsGridMinimal,
-  categories_scroller_min_v1: CardsGridMinimal,
   benefits_inline_min_v1: BulletsInlineMinimal,
-  benefits_cards_min_v1: BulletsInlineMinimal,
   contact_split_min_v1: ContactAuto,
-  contact_center_min_v1: ContactAuto,
 };
 
 export default function PacksRouter({ spec }) {
