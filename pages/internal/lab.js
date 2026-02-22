@@ -30,7 +30,7 @@ function runValidations(spec) {
   return [
     ok(spec?.version === "2.0", "spec.version == 2.0"),
     ok(!!spec?.meta?.site_id, "meta.site_id existe"),
-    ok(!!spec?.layout?.archetype, "layout.archetype existe"), // ✅ NUEVO
+    ok(!!spec?.layout?.archetype, "layout.archetype existe"),
     ok(Array.isArray(sections) && sections.length >= 3, "home.sections existe y tiene >=3"),
     ok(!!mods?.hero_auto?.headline, "modules.hero_auto.headline existe"),
     ok(!!mods?.contact_auto?.note, "modules.contact_auto.note existe"),
@@ -38,6 +38,75 @@ function runValidations(spec) {
     ok(goal !== "book_appointments" || sections.some((x) => x.module === "steps"), "book_appointments incluye steps"),
     ok(!note.toLowerCase().includes("solicita solicitar"), "No hay duplicado 'Solicita Solicitar...'"),
   ];
+}
+
+function pickQA(spec) {
+  const goal = spec?.strategy?.primary_goal || "";
+  const goalDetail = spec?.strategy?.goal_detail || "";
+  const pack = spec?.layout?.pack || "";
+  const archetype = spec?.layout?.archetype || "";
+  const domainGuess =
+    pack === "ecommerce_conversion"
+      ? "ecommerce"
+      : (spec?.business?.sector || "").toLowerCase().includes("saas") || (spec?.business?.sector || "").toLowerCase().includes("software")
+      ? "saas"
+      : "generic";
+
+  const bullets = (spec?.modules?.bullets_auto?.items || [])
+    .map((x) => (typeof x === "string" ? x : x?.title))
+    .filter(Boolean);
+
+  const steps = (spec?.modules?.steps_auto?.items || [])
+    .map((x) => ({
+      title: x?.title || "",
+      description: x?.description || "",
+    }))
+    .filter((x) => x.title);
+
+  const faqQs = (spec?.modules?.faq_auto?.items || [])
+    .map((x) => x?.q || x?.question || x?.title || "")
+    .filter(Boolean);
+
+  const cards = (spec?.modules?.cards_auto?.items || [])
+    .map((x) => ({
+      title: x?.title || "",
+      description: x?.description || "",
+    }))
+    .filter((x) => x.title);
+
+  const services = (spec?.modules?.services_auto?.items || [])
+    .map((x) => x?.title || x?.name || "")
+    .filter(Boolean);
+
+  // ecommerce: detecta si el bullet “24/48h” está presente
+  const hasFastShip = bullets.some((b) => /24\/48|24-48|24h|48h/i.test(String(b)));
+
+  // infer "intent" (solo para QA visible)
+  const d = String(goalDetail || "").toLowerCase();
+  let intent = "";
+  if (goal === "single_action") {
+    if (d.includes("audit") || d.includes("auditor") || d.includes("diagnos")) intent = "audit";
+    else if (d.includes("trial") || d.includes("prueba") || d.includes("piloto")) intent = "trial";
+    else if (d.includes("presupuesto") || d.includes("precio") || d.includes("cotiz")) intent = "quote";
+    else if (d.includes("llamada") || d.includes("call") || d.includes("reunión") || d.includes("reunion")) intent = "call";
+    else if (d.includes("descarga") || d.includes("download") || d.includes("pdf")) intent = "download";
+    else intent = "demo";
+  }
+
+  return {
+    goal,
+    goal_detail: goalDetail,
+    archetype,
+    pack,
+    domain_guess: domainGuess,
+    intent,
+    bullets,
+    steps,
+    faq_questions: faqQs,
+    cards,
+    services,
+    ecommerce_has_fast_ship_bullet: pack === "ecommerce_conversion" ? hasFastShip : undefined,
+  };
 }
 
 function buildValidationBundle(spec) {
@@ -68,7 +137,7 @@ function buildValidationBundle(spec) {
     },
     layout: {
       pack: spec?.layout?.pack,
-      archetype: spec?.layout?.archetype, // ✅ NUEVO
+      archetype: spec?.layout?.archetype,
       header_variant: spec?.layout?.header_variant,
       footer_variant: spec?.layout?.footer_variant,
       sections: sections.map((s) => ({
@@ -78,6 +147,7 @@ function buildValidationBundle(spec) {
       })),
     },
     modules: pickedModules,
+    qa: pickQA(spec), // ✅ NUEVO: QA compacto para 5.2-rules
     validations: runValidations(spec),
   };
 }
@@ -127,6 +197,16 @@ export default function InternalLab() {
 
   const parsed = useMemo(() => safeParseJSON(briefText), [briefText]);
   const validations = useMemo(() => (lastSpec ? runValidations(lastSpec) : []), [lastSpec]);
+  const qa = useMemo(() => (lastSpec ? pickQA(lastSpec) : null), [lastSpec]);
+
+  function patchGoalDetail(nextDetail) {
+    const p = safeParseJSON(briefText);
+    if (!p.ok) return;
+    const obj = { ...p.value };
+    obj.goal = { ...(obj.goal || {}) };
+    obj.goal.goal_detail = nextDetail;
+    setBriefText(pretty(obj));
+  }
 
   async function generateFromBrief() {
     setLastError("");
@@ -235,6 +315,40 @@ export default function InternalLab() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* ✅ Quick goal_detail buttons (para 5.2 rules) */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                onClick={() => patchGoalDetail("Solicitar demo")}
+                className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold"
+              >
+                goal_detail: Demo
+              </button>
+              <button
+                onClick={() => patchGoalDetail("Auditoría")}
+                className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold"
+              >
+                goal_detail: Auditoría
+              </button>
+              <button
+                onClick={() => patchGoalDetail("Prueba")}
+                className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold"
+              >
+                goal_detail: Prueba
+              </button>
+              <button
+                onClick={() => patchGoalDetail("Presupuesto")}
+                className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold"
+              >
+                goal_detail: Presupuesto
+              </button>
+              <button
+                onClick={() => patchGoalDetail("Llamada")}
+                className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold"
+              >
+                goal_detail: Llamada
+              </button>
             </div>
 
             <div className="mt-4">
@@ -351,6 +465,61 @@ export default function InternalLab() {
                     <div className="mt-1 text-sm font-semibold">{lastSpec?.brand?.brand_personality}</div>
                   </div>
                 </div>
+
+                {/* ✅ QA panel para 5.2-rules */}
+                {qa ? (
+                  <div className="mt-4 rounded-2xl border border-gray-200 p-4">
+                    <div className="text-xs text-gray-500">Rules QA</div>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2 text-sm">
+                      <div>
+                        <div className="text-xs text-gray-500">intent</div>
+                        <div className="font-semibold">{qa.intent || "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">domain_guess</div>
+                        <div className="font-semibold">{qa.domain_guess}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="text-xs text-gray-500">bullets</div>
+                      <ul className="mt-1 text-xs font-mono space-y-1">
+                        {(qa.bullets || []).map((b, i) => (
+                          <li key={i}>{b}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="text-xs text-gray-500">steps</div>
+                      <ul className="mt-1 text-xs font-mono space-y-1">
+                        {(qa.steps || []).map((s, i) => (
+                          <li key={i}>
+                            {s.title} — {s.description}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="text-xs text-gray-500">faq questions</div>
+                      <ul className="mt-1 text-xs font-mono space-y-1">
+                        {(qa.faq_questions || []).map((q, i) => (
+                          <li key={i}>{q}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {qa.pack === "ecommerce_conversion" ? (
+                      <div className="mt-3">
+                        <div className="text-xs text-gray-500">ecommerce_has_fast_ship_bullet</div>
+                        <div className="font-semibold">
+                          {String(qa.ecommerce_has_fast_ship_bullet)}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="mt-4 rounded-2xl border border-gray-200 p-4">
                   <div className="text-xs text-gray-500">contact_auto.note</div>
