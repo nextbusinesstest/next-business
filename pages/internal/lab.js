@@ -33,14 +33,8 @@ function runValidations(spec) {
     ok(Array.isArray(sections) && sections.length >= 3, "home.sections existe y tiene >=3"),
     ok(!!mods?.hero_auto?.headline, "modules.hero_auto.headline existe"),
     ok(!!mods?.contact_auto?.note, "modules.contact_auto.note existe"),
-    ok(
-      goal !== "single_action" || sections.some((x) => x.module === "steps"),
-      "single_action incluye steps"
-    ),
-    ok(
-      goal !== "book_appointments" || sections.some((x) => x.module === "steps"),
-      "book_appointments incluye steps"
-    ),
+    ok(goal !== "single_action" || sections.some((x) => x.module === "steps"), "single_action incluye steps"),
+    ok(goal !== "book_appointments" || sections.some((x) => x.module === "steps"), "book_appointments incluye steps"),
     ok(!note.toLowerCase().includes("solicita solicitar"), "No hay duplicado 'Solicita Solicitar...'"),
   ];
 }
@@ -56,6 +50,8 @@ function buildValidationBundle(spec) {
     cards_auto: pick("cards_auto"),
     bullets_auto: pick("bullets_auto"),
     steps_auto: pick("steps_auto"),
+    testimonials_auto: pick("testimonials_auto"),
+    faq_auto: pick("faq_auto"),
     text_auto: pick("text_auto"),
     contact_auto: pick("contact_auto"),
   };
@@ -84,19 +80,51 @@ function buildValidationBundle(spec) {
   };
 }
 
+async function copyTextRobust(text) {
+  // intento moderno
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // seguimos fallback
+  }
+
+  // fallback viejo
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export default function InternalLab() {
   const [presetId, setPresetId] = useState(PRESETS[0]?.id || "");
-  const activePreset = useMemo(() => PRESETS.find((p) => p.id === presetId) || PRESETS[0], [presetId]);
+  const activePreset = useMemo(
+    () => PRESETS.find((p) => p.id === presetId) || PRESETS[0],
+    [presetId]
+  );
 
   const [briefText, setBriefText] = useState(pretty(activePreset?.brief || {}));
   const [lastSpec, setLastSpec] = useState(null);
   const [lastError, setLastError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [copyMsg, setCopyMsg] = useState("");
 
-  // Carga preset en editor
   useEffect(() => {
     setBriefText(pretty(activePreset?.brief || {}));
-    // no borramos resultados automáticamente para que puedas comparar
   }, [activePreset?.id]);
 
   const parsed = useMemo(() => safeParseJSON(briefText), [briefText]);
@@ -127,11 +155,9 @@ export default function InternalLab() {
       const spec = await res.json();
       setLastSpec(spec);
 
-      // guarda para preview (como client/new)
       try {
         localStorage.setItem("nb_last_site_spec", JSON.stringify(spec));
       } catch {}
-
     } catch (e) {
       setLastError(e?.message || "Error generando spec");
       setLastSpec(null);
@@ -141,21 +167,23 @@ export default function InternalLab() {
   }
 
   function openPreview() {
-    // tu ruta actual de preview
     window.open("/internal/preview", "_blank", "noopener,noreferrer");
   }
 
-  function copySpec() {
+  async function copySpec() {
     if (!lastSpec) return;
-    navigator.clipboard?.writeText(pretty(lastSpec));
+    const ok = await copyTextRobust(pretty(lastSpec));
+    setCopyMsg(ok ? "Copiado ✅" : "No se pudo copiar ❌");
+    setTimeout(() => setCopyMsg(""), 1500);
   }
 
-  function copyValidationBundle() {
+  async function copyValidationBundle() {
     if (!lastSpec) return;
     const bundle = buildValidationBundle(lastSpec);
-    navigator.clipboard?.writeText(JSON.stringify(bundle, null, 2));
+    const ok = await copyTextRobust(JSON.stringify(bundle, null, 2));
+    setCopyMsg(ok ? "Copiado ✅" : "No se pudo copiar ❌");
+    setTimeout(() => setCopyMsg(""), 1500);
   }
-
 
   function downloadSpec() {
     if (!lastSpec) return;
@@ -189,7 +217,8 @@ export default function InternalLab() {
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold">Internal Lab — Next Business</h1>
           <p className="text-sm text-gray-600">
-            Presets + generación + validación rápida. Guarda en localStorage: <code>nb_last_site_spec</code>.
+            Presets + generación + validación rápida. Guarda en localStorage:{" "}
+            <code>nb_last_site_spec</code>.
           </p>
         </div>
 
@@ -253,6 +282,14 @@ export default function InternalLab() {
               </button>
 
               <button
+                onClick={copyValidationBundle}
+                disabled={!lastSpec}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold disabled:opacity-50"
+              >
+                Copy validation bundle
+              </button>
+
+              <button
                 onClick={downloadSpec}
                 disabled={!lastSpec}
                 className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold disabled:opacity-50"
@@ -267,14 +304,10 @@ export default function InternalLab() {
                 Clear local spec
               </button>
             </div>
-                  
-            <button
-              onClick={copyValidationBundle}
-              disabled={!lastSpec}
-              className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold disabled:opacity-50"
-            >
-              Copy validation bundle
-            </button>
+
+            {copyMsg ? (
+              <div className="mt-3 text-sm font-semibold text-gray-700">{copyMsg}</div>
+            ) : null}
 
             {lastError ? (
               <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -303,7 +336,9 @@ export default function InternalLab() {
                     <div className="text-xs text-gray-500">goal</div>
                     <div className="mt-1 text-sm font-semibold">{lastSpec?.strategy?.primary_goal}</div>
                     {lastSpec?.strategy?.goal_detail ? (
-                      <div className="mt-1 text-xs text-gray-600">detail: {lastSpec.strategy.goal_detail}</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        detail: {lastSpec.strategy.goal_detail}
+                      </div>
                     ) : null}
                   </div>
 
@@ -329,7 +364,9 @@ export default function InternalLab() {
                   <div className="text-xs text-gray-500">home.sections</div>
                   <ul className="mt-2 text-xs font-mono space-y-1">
                     {sectionsView.map((x, i) => (
-                      <li key={i} className="text-gray-800">{x}</li>
+                      <li key={i} className="text-gray-800">
+                        {x}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -341,7 +378,9 @@ export default function InternalLab() {
                       <div
                         key={i}
                         className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm ${
-                          v.ok ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"
+                          v.ok
+                            ? "bg-green-50 text-green-800 border border-green-200"
+                            : "bg-red-50 text-red-700 border border-red-200"
                         }`}
                       >
                         <span>{v.msg}</span>
@@ -353,7 +392,9 @@ export default function InternalLab() {
 
                 <div className="mt-4">
                   <details className="rounded-2xl border border-gray-200 p-4">
-                    <summary className="text-sm font-semibold cursor-pointer">View full spec (JSON)</summary>
+                    <summary className="text-sm font-semibold cursor-pointer">
+                      View full spec (JSON)
+                    </summary>
                     <pre className="mt-3 text-xs bg-gray-50 border rounded-xl p-4 overflow-auto">
                       {pretty(lastSpec)}
                     </pre>
@@ -365,7 +406,8 @@ export default function InternalLab() {
         </div>
 
         <div className="mt-10 text-xs text-gray-500">
-          Tip: esto no sustituye a /client/new. Es tu “QA interno” para iterar rápido sin rellenar formularios.
+          Tip: esto no sustituye a /client/new. Es tu “QA interno” para iterar rápido sin rellenar
+          formularios.
         </div>
       </div>
     </div>
