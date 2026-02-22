@@ -3,14 +3,10 @@ import { resolveTheme, toStyleVars } from "../../lib/themes";
 
 /**
  * PacksRouter (unificado, robusto)
- * - No rompe si faltan variants o si el shape del spec varía (title/name, bullets.items, etc.)
- * - Normaliza módulos "auto" (hero/services/bullets/cards/contact/steps) para que SIEMPRE rendericen contenido.
- * - Aplica theme vars de forma segura (nunca rompe el build).
+ * - No rompe si faltan variants o si el shape del spec varía
+ * - Normaliza módulos "auto" (hero/services/bullets/cards/contact/steps/testimonials/faq)
+ * - Aplica theme vars de forma segura
  */
-
-/* -----------------------------
-  Utils
------------------------------ */
 
 const DEFAULT_THEME = {
   vars: {
@@ -30,7 +26,6 @@ const DEFAULT_THEME = {
 };
 
 function getByRef(spec, ref) {
-  // ref esperado: "modules.x"
   if (!ref || typeof ref !== "string") return null;
   const parts = ref.split(".");
   if (parts.length !== 2) return null;
@@ -61,7 +56,7 @@ function normTitle(x) {
 
 function normDesc(x) {
   if (!x) return "";
-  return (x.description || x.desc || x.body || x.note || "").toString().trim();
+  return (x.description || x.desc || x.body || x.note || x.a || "").toString().trim();
 }
 
 function normItemsToNameDesc(arrOrObj) {
@@ -104,8 +99,6 @@ function normalizeHeroData(spec, data) {
         : spec?.business?.sector || spec?.business?.location || "")
     ).toString().trim();
 
-  // En tu spec v2 viene como strings: cta_primary / cta_secondary
-  // Pero también soportamos legacy: primary_cta/secondary_cta
   const ctaPrimaryLabel = (data?.cta_primary || data?.primary_cta?.label || "").toString().trim();
   const ctaSecondaryLabel = (data?.cta_secondary || data?.secondary_cta?.label || "").toString().trim();
 
@@ -138,10 +131,6 @@ function safeToStyleVars(vars) {
   }
 }
 
-/* -----------------------------
-  Shared layout primitives
------------------------------ */
-
 function Container({ children }) {
   return <div className="max-w-6xl mx-auto px-5 sm:px-6">{children}</div>;
 }
@@ -158,9 +147,7 @@ function SectionWrap({ id, title, kicker, children, className }) {
       }}
     >
       <Container>
-        {kicker ? (
-          <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">{kicker}</div>
-        ) : null}
+        {kicker ? <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">{kicker}</div> : null}
         {title ? <h2 className="mt-2 text-2xl font-semibold text-[var(--c-text)]">{title}</h2> : null}
         <div className={cx(title ? "mt-6" : "", "")}>{children}</div>
       </Container>
@@ -168,9 +155,7 @@ function SectionWrap({ id, title, kicker, children, className }) {
   );
 }
 
-/* -----------------------------
-  Header variants
------------------------------ */
+/* Header variants */
 
 function HeaderMinimal({ spec }) {
   const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
@@ -261,9 +246,7 @@ function HeaderTrust({ spec }) {
   );
 }
 
-/* -----------------------------
-  Footer variants
------------------------------ */
+/* Footer */
 
 function FooterSimple({ spec }) {
   const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
@@ -285,9 +268,7 @@ function FooterSimple({ spec }) {
   );
 }
 
-/* -----------------------------
-  Module variants
------------------------------ */
+/* Modules */
 
 function HeroProductMinimal({ spec, data }) {
   const hero = normalizeHeroData(spec, data);
@@ -349,9 +330,6 @@ function HeroProductMinimal({ spec, data }) {
   );
 }
 
-/**
- * ✅ StepsAuto — robusto (acepta strings o {title/name, description/desc})
- */
 function StepsAuto({ data }) {
   const title = (data?.title || "Cómo funciona").toString();
   const rawItems = Array.isArray(data?.items) ? data.items : [];
@@ -372,6 +350,66 @@ function StepsAuto({ data }) {
             <div className="mt-1 font-semibold text-[var(--c-text)]">{it.title}</div>
             {it.description ? <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
           </div>
+        ))}
+      </div>
+    </SectionWrap>
+  );
+}
+
+function TestimonialsAuto({ data }) {
+  const title = (data?.title || "Opiniones").toString();
+  const raw = Array.isArray(data?.items) ? data.items : [];
+
+  const items = raw
+    .map((it) => {
+      if (typeof it === "string") return { quote: it, name: "Cliente", role: "" };
+      return {
+        quote: (it.quote || it.text || "").toString().trim(),
+        name: (it.name || "Cliente").toString().trim(),
+        role: (it.role || "").toString().trim(),
+      };
+    })
+    .filter((it) => it.quote);
+
+  return (
+    <SectionWrap id={data?.id || "testimonials"} title={title} kicker="Confianza">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((it, idx) => (
+          <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-sm text-[var(--c-text)]/80">“{it.quote}”</div>
+            <div className="mt-4 text-sm font-semibold text-[var(--c-text)]">{it.name}</div>
+            {it.role ? <div className="text-xs text-[var(--c-text)]/60">{it.role}</div> : null}
+          </div>
+        ))}
+      </div>
+    </SectionWrap>
+  );
+}
+
+function FaqAuto({ data }) {
+  const title = (data?.title || "Preguntas frecuentes").toString();
+  const raw = Array.isArray(data?.items) ? data.items : [];
+
+  const items = raw
+    .map((it) => {
+      if (typeof it === "string") return { q: it, a: "" };
+      return {
+        q: (it.q || it.question || it.title || "").toString().trim(),
+        a: (it.a || it.answer || it.description || "").toString().trim(),
+      };
+    })
+    .filter((it) => it.q);
+
+  return (
+    <SectionWrap id={data?.id || "faq"} title={title} kicker="FAQ">
+      <div className="grid gap-3">
+        {items.map((it, idx) => (
+          <details key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-[var(--c-text)]">
+              {it.q}
+            </summary>
+            {it.a ? <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.a}</div> : null}
+          </details>
         ))}
       </div>
     </SectionWrap>
@@ -478,9 +516,7 @@ function ContactAuto({ spec, data }) {
   );
 }
 
-/* -----------------------------
-  Variant maps
------------------------------ */
+/* Variant maps */
 
 const HEADER_MAP = {
   header_minimal_v1: HeaderMinimal,
@@ -496,33 +532,28 @@ const HERO_MAP = {
 };
 
 const SECTION_MAP = {
-  // ✅ Bloque 3 (Trust/Proof)
+  // goal-driven + proof
   steps_auto_v1: StepsAuto,
+  testimonials_auto_v1: TestimonialsAuto,
+  faq_auto_v1: FaqAuto,
 
   // base
   services_grid_auto_v1: ServicesGridAuto,
   text_auto_v1: TextAuto,
   contact_auto_v1: ContactAuto,
 
-  // bridge legacy->auto
+  // bridge
   cards_auto_v1: CardsGridMinimal,
   bullets_auto_v1: BulletsInlineMinimal,
 
-  // ✅ FIX MINIMO ECOMMERCE: mapear variantes nuevas a componentes existentes
-  // (así NO sale fallback rojo aunque el spec pida variants ecommerce)
+  // ecommerce minimal fallback mappings
   categories_grid_min_v1: CardsGridMinimal,
-  categories_scroller_min_v1: CardsGridMinimal,   // fallback a grid por ahora
-
+  categories_scroller_min_v1: CardsGridMinimal,
   benefits_inline_min_v1: BulletsInlineMinimal,
-  benefits_cards_min_v1: BulletsInlineMinimal,    // fallback a inline por ahora
-
-  contact_split_min_v1: ContactAuto,              // fallback al contact base
-  contact_center_min_v1: ContactAuto,             // fallback al contact base
+  benefits_cards_min_v1: BulletsInlineMinimal,
+  contact_split_min_v1: ContactAuto,
+  contact_center_min_v1: ContactAuto,
 };
-
-/* -----------------------------
-  Main renderer
------------------------------ */
 
 export default function PacksRouter({ spec }) {
   const headerKey = spec?.layout?.header_variant || "header_minimal_v1";
