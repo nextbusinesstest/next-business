@@ -3,10 +3,7 @@ import { resolveTheme, toStyleVars } from "../../lib/themes";
 
 /**
  * PacksRouter (unificado, robusto)
- * - No rompe si faltan variants o si el shape del spec varía
- * - Normaliza módulos "auto" (hero/services/bullets/cards/contact/steps/testimonials/faq)
- * - Aplica theme vars de forma segura
- * - ✅ Bloque 4.2: overrides por archetype + hero split SaaS
+ * - ✅ Bloque 4.3: variants nuevas para SaaS y Booking
  */
 
 const DEFAULT_THEME = {
@@ -49,7 +46,6 @@ function safeStr(v, fallback = "—") {
   return t || fallback;
 }
 
-// Normalizadores
 function normTitle(x) {
   if (!x) return "";
   return (x.title || x.name || "").toString().trim();
@@ -132,7 +128,6 @@ function safeToStyleVars(vars) {
   }
 }
 
-// ✅ Bloque 4.2: overrides por archetype (solo vars, sin tocar componentes)
 function applyArchetypeOverrides(vars, archetype) {
   const v = { ...(vars || {}) };
 
@@ -183,7 +178,7 @@ function SectionWrap({ id, title, kicker, children, className }) {
   );
 }
 
-/* Header variants */
+/* Header/Footer */
 
 function HeaderMinimal({ spec }) {
   const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
@@ -274,8 +269,6 @@ function HeaderTrust({ spec }) {
   );
 }
 
-/* Footer */
-
 function FooterSimple({ spec }) {
   const brandName = spec?.business?.name || spec?.brand?.name || "Preview";
   const type = spec?.business?.type || "";
@@ -358,31 +351,21 @@ function HeroProductMinimal({ spec, data }) {
   );
 }
 
-// ✅ Bloque 4.2: hero split SaaS (diferencia visual real)
 function HeroSaasSplit({ spec, data }) {
   const hero = normalizeHeroData(spec, data);
-
-  const badges = [
-    "Onboarding guiado",
-    "KPIs en tiempo real",
-    "Automatización",
-  ];
+  const badges = ["Onboarding guiado", "KPIs en tiempo real", "Automatización"];
 
   return (
     <section className="py-16">
       <Container>
-        <div
-          className="rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-8 shadow-[var(--shadow)]"
-        >
+        <div className="rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-8 shadow-[var(--shadow)]">
           <div className="grid gap-8 lg:grid-cols-2 items-start">
             <div>
               <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">SaaS</div>
               <h1 className="mt-3 text-4xl md:text-5xl font-semibold text-[var(--c-text)] leading-tight">
                 {hero.headline}
               </h1>
-              {hero.subheadline ? (
-                <p className="mt-4 text-[var(--c-text)]/70 max-w-xl">{hero.subheadline}</p>
-              ) : null}
+              {hero.subheadline ? <p className="mt-4 text-[var(--c-text)]/70 max-w-xl">{hero.subheadline}</p> : null}
 
               <div className="mt-6 flex flex-wrap gap-2">
                 {badges.map((b) => (
@@ -418,9 +401,7 @@ function HeroSaasSplit({ spec, data }) {
             <div className="grid gap-4">
               <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5">
                 <div className="text-xs text-[var(--c-text)]/60">Resultado</div>
-                <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">
-                  Menos fricción. Más control.
-                </div>
+                <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">Menos fricción. Más control.</div>
                 <div className="mt-2 text-sm text-[var(--c-text)]/70">
                   Centraliza incidencias, automatiza asignaciones y mejora SLA con visibilidad real.
                 </div>
@@ -525,6 +506,109 @@ function FaqAuto({ data }) {
     </SectionWrap>
   );
 }
+
+/* -----------------------------
+  ✅ BLOQUE 4.3: NUEVAS VARIANTS
+----------------------------- */
+
+// SaaS bullets: checks compactos
+function BulletsSaasChecks({ data }) {
+  const title = (data?.title || "Por qué elegirnos").toString();
+  const bullets = normBullets(data);
+
+  return (
+    <SectionWrap id={data?.id || "benefits"} title={title} kicker="Ventajas">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {bullets.map((b, idx) => (
+          <div key={idx} className="flex gap-3 items-start rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-4">
+            <span className="mt-0.5 inline-flex w-6 h-6 items-center justify-center rounded-full bg-[var(--c-accent)] text-white text-xs font-bold">
+              ✓
+            </span>
+            <div className="text-sm text-[var(--c-text)]/85">{b}</div>
+          </div>
+        ))}
+      </div>
+    </SectionWrap>
+  );
+}
+
+// Booking bullets: inline suave tipo “chips”
+function BulletsTrustInline({ data }) {
+  const title = (data?.title || "Por qué elegirnos").toString();
+  const bullets = normBullets(data);
+
+  return (
+    <SectionWrap id={data?.id || "benefits"} title={title} kicker="Confianza">
+      <div className="flex flex-wrap gap-2">
+        {bullets.map((b, idx) => (
+          <span
+            key={idx}
+            className="text-sm px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--c-text)]/80"
+          >
+            {b}
+          </span>
+        ))}
+      </div>
+    </SectionWrap>
+  );
+}
+
+// SaaS services: “módulos” más producto
+function ServicesGridSaas({ data }) {
+  const title = (data?.title || "Soluciones").toString();
+  const items = normItemsToNameDesc(data);
+
+  return (
+    <SectionWrap id={data?.id || "services"} title={title} kicker="Módulos">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((it, idx) => (
+          <div key={idx} className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow)]">
+            <div className="flex items-center justify-between gap-3">
+              <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
+              <span className="text-xs px-2 py-1 rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-[var(--c-text)]/70">
+                Módulo
+              </span>
+            </div>
+            <div className="mt-2 text-sm text-[var(--c-text)]/70">
+              {it.description || "Configurable según tu proceso y equipo."}
+            </div>
+          </div>
+        ))}
+      </div>
+    </SectionWrap>
+  );
+}
+
+// Booking services: cards más suaves
+function ServicesGridBooking({ data }) {
+  const title = (data?.title || "Tratamientos y servicios").toString();
+  const items = normItemsToNameDesc(data);
+
+  return (
+    <SectionWrap id={data?.id || "services"} title={title} kicker="Atención">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((it, idx) => (
+          <div
+            key={idx}
+            className="rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-6"
+          >
+            <div className="flex items-center gap-3">
+              <span className="inline-flex w-10 h-10 items-center justify-center rounded-full bg-[var(--c-accent)]/15 text-[var(--c-accent)] font-bold">
+                +
+              </span>
+              <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
+            </div>
+            {it.description ? <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
+          </div>
+        ))}
+      </div>
+    </SectionWrap>
+  );
+}
+
+/* -----------------------------
+  Otros módulos (base)
+----------------------------- */
 
 function CardsGridMinimal({ data }) {
   const title = (data?.title || "Categorías").toString();
@@ -636,7 +720,7 @@ const FOOTER_MAP = {
 
 const HERO_MAP = {
   hero_product_minimal_v1: HeroProductMinimal,
-  hero_saas_split_v1: HeroSaasSplit, // ✅ NUEVO
+  hero_saas_split_v1: HeroSaasSplit,
 };
 
 const SECTION_MAP = {
@@ -644,13 +728,20 @@ const SECTION_MAP = {
   testimonials_auto_v1: TestimonialsAuto,
   faq_auto_v1: FaqAuto,
 
+  // ✅ Bloque 4.3
+  bullets_saas_checks_v1: BulletsSaasChecks,
+  bullets_trust_inline_v1: BulletsTrustInline,
+  services_grid_saas_v1: ServicesGridSaas,
+  services_grid_booking_v1: ServicesGridBooking,
+
+  // base
   services_grid_auto_v1: ServicesGridAuto,
   text_auto_v1: TextAuto,
   contact_auto_v1: ContactAuto,
-
   cards_auto_v1: CardsGridMinimal,
   bullets_auto_v1: BulletsInlineMinimal,
 
+  // fallbacks ecommerce
   categories_grid_min_v1: CardsGridMinimal,
   categories_scroller_min_v1: CardsGridMinimal,
   benefits_inline_min_v1: BulletsInlineMinimal,
@@ -673,7 +764,6 @@ export default function PacksRouter({ spec }) {
   }, [spec]);
 
   const theme = useMemo(() => safeResolveTheme(spec), [spec]);
-
   const themeStyle = useMemo(() => {
     const merged = applyArchetypeOverrides(theme.vars, archetype);
     return safeToStyleVars(merged);
