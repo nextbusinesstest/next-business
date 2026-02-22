@@ -6,6 +6,7 @@ import { resolveTheme, toStyleVars } from "../../lib/themes";
  * - No rompe si faltan variants o si el shape del spec varía
  * - Normaliza módulos "auto" (hero/services/bullets/cards/contact/steps/testimonials/faq)
  * - Aplica theme vars de forma segura
+ * - ✅ Bloque 4.2: overrides por archetype + hero split SaaS
  */
 
 const DEFAULT_THEME = {
@@ -129,6 +130,33 @@ function safeToStyleVars(vars) {
   } catch {
     return {};
   }
+}
+
+// ✅ Bloque 4.2: overrides por archetype (solo vars, sin tocar componentes)
+function applyArchetypeOverrides(vars, archetype) {
+  const v = { ...(vars || {}) };
+
+  if (archetype === "saas_landing_v1") {
+    v["--section-py"] = "52px";
+    v["--surface-2"] = "#f6f7fb";
+    v["--border"] = "#e6e8f0";
+    v["--shadow"] = "0_24px_70px_rgba(2,6,23,0.14)";
+    v["--r-sm"] = "14px";
+    v["--r-md"] = "18px";
+    v["--r-lg"] = "26px";
+  }
+
+  if (archetype === "booking_trust_v1") {
+    v["--section-py"] = "72px";
+    v["--surface-2"] = "#f7fafc";
+    v["--border"] = "#e2e8f0";
+    v["--shadow"] = "0_18px_55px_rgba(15,23,42,0.10)";
+    v["--r-sm"] = "16px";
+    v["--r-md"] = "20px";
+    v["--r-lg"] = "28px";
+  }
+
+  return v;
 }
 
 function Container({ children }) {
@@ -304,12 +332,12 @@ function HeroProductMinimal({ spec, data }) {
             </div>
           </div>
 
-          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-3xl p-6 shadow-[var(--shadow)]">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[var(--r-lg)] p-6 shadow-[var(--shadow)]">
             <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">Resumen</div>
             <div className="mt-2 text-lg font-semibold text-[var(--c-text)]">{spec?.business?.name || "Preview"}</div>
 
             <div className="mt-6 space-y-3">
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+              <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-4">
                 <div className="text-xs text-[var(--c-text)]/60">Contacto</div>
                 <div className="mt-1 text-sm text-[var(--c-text)]">
                   {safeStr(contact.phone)}
@@ -318,9 +346,93 @@ function HeroProductMinimal({ spec, data }) {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+              <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-4">
                 <div className="text-xs text-[var(--c-text)]/60">Dirección</div>
                 <div className="mt-1 text-sm text-[var(--c-text)]">{safeStr(contact.address)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Container>
+    </section>
+  );
+}
+
+// ✅ Bloque 4.2: hero split SaaS (diferencia visual real)
+function HeroSaasSplit({ spec, data }) {
+  const hero = normalizeHeroData(spec, data);
+
+  const badges = [
+    "Onboarding guiado",
+    "KPIs en tiempo real",
+    "Automatización",
+  ];
+
+  return (
+    <section className="py-16">
+      <Container>
+        <div
+          className="rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--surface-2)] p-8 shadow-[var(--shadow)]"
+        >
+          <div className="grid gap-8 lg:grid-cols-2 items-start">
+            <div>
+              <div className="text-xs tracking-wide uppercase text-[var(--c-text)]/60">SaaS</div>
+              <h1 className="mt-3 text-4xl md:text-5xl font-semibold text-[var(--c-text)] leading-tight">
+                {hero.headline}
+              </h1>
+              {hero.subheadline ? (
+                <p className="mt-4 text-[var(--c-text)]/70 max-w-xl">{hero.subheadline}</p>
+              ) : null}
+
+              <div className="mt-6 flex flex-wrap gap-2">
+                {badges.map((b) => (
+                  <span
+                    key={b}
+                    className="text-xs px-3 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--c-text)]/70"
+                  >
+                    {b}
+                  </span>
+                ))}
+              </div>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                {hero.primary ? (
+                  <a
+                    href={hero.primary.href || "#contact"}
+                    className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[var(--c-accent)] text-white font-semibold hover:opacity-95"
+                  >
+                    {hero.primary.label}
+                  </a>
+                ) : null}
+                {hero.secondary ? (
+                  <a
+                    href={hero.secondary.href || "#services"}
+                    className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:opacity-95 font-semibold text-[var(--c-text)]"
+                  >
+                    {hero.secondary.label}
+                  </a>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5">
+                <div className="text-xs text-[var(--c-text)]/60">Resultado</div>
+                <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">
+                  Menos fricción. Más control.
+                </div>
+                <div className="mt-2 text-sm text-[var(--c-text)]/70">
+                  Centraliza incidencias, automatiza asignaciones y mejora SLA con visibilidad real.
+                </div>
+              </div>
+
+              <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5">
+                <div className="text-xs text-[var(--c-text)]/60">En 3 pasos</div>
+                <ol className="mt-2 space-y-2 text-sm text-[var(--c-text)]/80">
+                  <li>1) Solicita demo</li>
+                  <li>2) Te la mostramos</li>
+                  <li>3) Arranque y resultados</li>
+                </ol>
               </div>
             </div>
           </div>
@@ -345,7 +457,7 @@ function StepsAuto({ data }) {
     <SectionWrap id={data?.id || "how"} title={title} kicker="Proceso">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it, idx) => (
-          <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <div key={idx} className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="text-xs text-[var(--c-text)]/60">Paso {idx + 1}</div>
             <div className="mt-1 font-semibold text-[var(--c-text)]">{it.title}</div>
             {it.description ? <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
@@ -375,7 +487,7 @@ function TestimonialsAuto({ data }) {
     <SectionWrap id={data?.id || "testimonials"} title={title} kicker="Confianza">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it, idx) => (
-          <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <div key={idx} className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="text-sm text-[var(--c-text)]/80">“{it.quote}”</div>
             <div className="mt-4 text-sm font-semibold text-[var(--c-text)]">{it.name}</div>
             {it.role ? <div className="text-xs text-[var(--c-text)]/60">{it.role}</div> : null}
@@ -404,10 +516,8 @@ function FaqAuto({ data }) {
     <SectionWrap id={data?.id || "faq"} title={title} kicker="FAQ">
       <div className="grid gap-3">
         {items.map((it, idx) => (
-          <details key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-[var(--c-text)]">
-              {it.q}
-            </summary>
+          <details key={idx} className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-[var(--c-text)]">{it.q}</summary>
             {it.a ? <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.a}</div> : null}
           </details>
         ))}
@@ -424,10 +534,7 @@ function CardsGridMinimal({ data }) {
     <SectionWrap id={data?.id || "categories"} title={title} kicker="Explora rápido">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it, idx) => (
-          <div
-            key={idx}
-            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:opacity-95 transition"
-          >
+          <div key={idx} className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5 hover:opacity-95 transition">
             <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
             {it.description ? <div className="mt-1 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
             <div className="mt-3 text-sm text-[var(--c-accent)] font-semibold">Ver →</div>
@@ -464,7 +571,7 @@ function ServicesGridAuto({ data }) {
     <SectionWrap id={data?.id || "services"} title={title}>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it, idx) => (
-          <div key={idx} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <div key={idx} className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="font-semibold text-[var(--c-text)]">{it.name}</div>
             {it.description ? <div className="mt-2 text-sm text-[var(--c-text)]/70">{it.description}</div> : null}
           </div>
@@ -498,15 +605,15 @@ function ContactAuto({ spec, data }) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="text-xs text-[var(--c-text)]/60">Teléfono</div>
             <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.phone)}</div>
           </div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="text-xs text-[var(--c-text)]/60">Email</div>
             <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.email)}</div>
           </div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <div className="rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="text-xs text-[var(--c-text)]/60">Dirección</div>
             <div className="mt-1 text-sm font-semibold text-[var(--c-text)]">{safeStr(contact.address)}</div>
           </div>
@@ -529,24 +636,21 @@ const FOOTER_MAP = {
 
 const HERO_MAP = {
   hero_product_minimal_v1: HeroProductMinimal,
+  hero_saas_split_v1: HeroSaasSplit, // ✅ NUEVO
 };
 
 const SECTION_MAP = {
-  // goal-driven + proof
   steps_auto_v1: StepsAuto,
   testimonials_auto_v1: TestimonialsAuto,
   faq_auto_v1: FaqAuto,
 
-  // base
   services_grid_auto_v1: ServicesGridAuto,
   text_auto_v1: TextAuto,
   contact_auto_v1: ContactAuto,
 
-  // bridge
   cards_auto_v1: CardsGridMinimal,
   bullets_auto_v1: BulletsInlineMinimal,
 
-  // ecommerce minimal fallback mappings
   categories_grid_min_v1: CardsGridMinimal,
   categories_scroller_min_v1: CardsGridMinimal,
   benefits_inline_min_v1: BulletsInlineMinimal,
@@ -558,6 +662,7 @@ const SECTION_MAP = {
 export default function PacksRouter({ spec }) {
   const headerKey = spec?.layout?.header_variant || "header_minimal_v1";
   const footerKey = spec?.layout?.footer_variant || "footer_simple_v1";
+  const archetype = spec?.layout?.archetype || "default_v1";
 
   const Header = HEADER_MAP[headerKey] || HeaderMinimal;
   const Footer = FOOTER_MAP[footerKey] || FooterSimple;
@@ -568,7 +673,11 @@ export default function PacksRouter({ spec }) {
   }, [spec]);
 
   const theme = useMemo(() => safeResolveTheme(spec), [spec]);
-  const themeStyle = useMemo(() => safeToStyleVars(theme.vars), [theme]);
+
+  const themeStyle = useMemo(() => {
+    const merged = applyArchetypeOverrides(theme.vars, archetype);
+    return safeToStyleVars(merged);
+  }, [theme, archetype]);
 
   return (
     <div className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]" style={themeStyle}>
