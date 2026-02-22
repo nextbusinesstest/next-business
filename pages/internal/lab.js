@@ -30,6 +30,7 @@ function runValidations(spec) {
   return [
     ok(spec?.version === "2.0", "spec.version == 2.0"),
     ok(!!spec?.meta?.site_id, "meta.site_id existe"),
+    ok(!!spec?.layout?.archetype, "layout.archetype existe"), // ✅ NUEVO
     ok(Array.isArray(sections) && sections.length >= 3, "home.sections existe y tiene >=3"),
     ok(!!mods?.hero_auto?.headline, "modules.hero_auto.headline existe"),
     ok(!!mods?.contact_auto?.note, "modules.contact_auto.note existe"),
@@ -67,6 +68,7 @@ function buildValidationBundle(spec) {
     },
     layout: {
       pack: spec?.layout?.pack,
+      archetype: spec?.layout?.archetype, // ✅ NUEVO
       header_variant: spec?.layout?.header_variant,
       footer_variant: spec?.layout?.footer_variant,
       sections: sections.map((s) => ({
@@ -81,17 +83,13 @@ function buildValidationBundle(spec) {
 }
 
 async function copyTextRobust(text) {
-  // intento moderno
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
       return true;
     }
-  } catch {
-    // seguimos fallback
-  }
+  } catch {}
 
-  // fallback viejo
   try {
     const ta = document.createElement("textarea");
     ta.value = text;
@@ -223,7 +221,6 @@ export default function InternalLab() {
         </div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
-          {/* Left: Presets + Editor */}
           <div className="rounded-2xl border border-gray-200 p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold">Brief editor</div>
@@ -316,7 +313,6 @@ export default function InternalLab() {
             ) : null}
           </div>
 
-          {/* Right: Results */}
           <div className="rounded-2xl border border-gray-200 p-5">
             <div className="text-sm font-semibold">Result</div>
 
@@ -345,6 +341,9 @@ export default function InternalLab() {
                   <div className="rounded-2xl border border-gray-200 p-4">
                     <div className="text-xs text-gray-500">pack</div>
                     <div className="mt-1 text-sm font-semibold">{lastSpec?.layout?.pack}</div>
+                    <div className="mt-1 text-xs text-gray-600">
+                      archetype: {lastSpec?.layout?.archetype || "—"}
+                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 p-4">
