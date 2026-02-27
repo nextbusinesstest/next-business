@@ -234,10 +234,10 @@ export default async function handler(req, res) {
       body.brand_personality ?? body?.brand?.brand_personality,
       40
     );
-    const allowed_personalities = new Set(Object.keys(personalityPreset || {}));
-    const brand_personality = allowed_personalities.has(raw_personality)
-      ? raw_personality
-      : "";
+    
+    // brand_personality override (from Lab/brief). Allow if personalityPreset recognizes it.
+    const preset = raw_personality ? personalityPreset(raw_personality) : null;
+    const brand_personality = preset ? raw_personality : "";
 
     const services = sanitizeList(body.services, 20, 80);
 
