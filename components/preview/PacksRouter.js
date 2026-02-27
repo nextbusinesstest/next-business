@@ -842,34 +842,28 @@ const FOOTER_MAP = {
 
 const HERO_MAP = {
   hero_product_minimal_v1: HeroProductMinimal,
-  hero_product_split_v1: HeroProductSplit, // ✅ ecommerce premium
-  hero_saas_split_v1: HeroSaasSplit,
+  hero_product_split_v1: HeroProductSplit, // ✅
+  hero_saas_split_v1: HeroSaasSplit,        // (si lo tienes)
 };
 
 const SECTION_MAP = {
+  // goal-driven + proof
   steps_auto_v1: StepsAuto,
   testimonials_auto_v1: TestimonialsAuto,
   faq_auto_v1: FaqAuto,
 
-  // Bloque 4.3
-  bullets_saas_checks_v1: BulletsSaasChecks,
-  bullets_trust_inline_v1: BulletsTrustInline,
-  services_grid_saas_v1: ServicesGridSaas,
-  services_grid_booking_v1: ServicesGridBooking,
+  services_grid_auto_v1: ServicesGridAuto,
+  text_auto_v1: TextAuto,
 
-  // ✅ Bloque 4.4 ecommerce premium
+  // ✅ ecommerce premium variants reales
   categories_scroller_min_v1: CardsScrollerMinimal,
   benefits_cards_min_v1: BenefitsCardsMinimal,
   contact_center_min_v1: ContactCenterMinimal,
 
-  // base
-  services_grid_auto_v1: ServicesGridAuto,
-  text_auto_v1: TextAuto,
-  contact_auto_v1: ContactAuto,
+  // keep compatibility
   cards_auto_v1: CardsGridMinimal,
   bullets_auto_v1: BulletsInlineMinimal,
-
-  // fallbacks ecommerce (si algún spec antiguo los pide)
+  contact_auto_v1: ContactAuto,
   categories_grid_min_v1: CardsGridMinimal,
   benefits_inline_min_v1: BulletsInlineMinimal,
   contact_split_min_v1: ContactAuto,
