@@ -148,6 +148,9 @@ function rateLimit(req, res) {
  * - deterministic (no cambia si repites el mismo negocio)
  * - ajusta brand_expression + design_tokens
  * - define header/footer si no existen
+ *
+ * IMPORTANTE: si el spec ya trae brand_personality (override desde Lab/brief),
+ * se respeta SIEMPRE si existe en personalityPreset().
  */
 function applyAutoPersonality(site_spec) {
   if (!site_spec || typeof site_spec !== "object") return site_spec;
@@ -158,13 +161,17 @@ function applyAutoPersonality(site_spec) {
     site_spec?.business?.name ||
     "site";
 
-  const picked = autoPickPersonality({
-    site_id,
-    business: site_spec?.business,
-    strategy: site_spec?.strategy,
-  });
+  const existing = site_spec?.brand?.brand_personality;
+  const picked =
+    existing && personalityPreset(existing)
+      ? existing
+      : autoPickPersonality({
+          site_id,
+          business: site_spec?.business,
+          strategy: site_spec?.strategy,
+        });
 
-  const preset = personalityPreset(picked);
+  const preset = personalityPreset(picked) || {};
 
   site_spec.brand = site_spec.brand || {};
 
@@ -222,6 +229,16 @@ export default async function handler(req, res) {
     const tone = clampStr(body.tone, 24);
     const seed = clampStr(body.seed, 24);
 
+    // brand_personality override (from Lab/brief). Must be allowlisted.
+    const raw_personality = clampStr(
+      body.brand_personality ?? body?.brand?.brand_personality,
+      40
+    );
+    const allowed_personalities = new Set(Object.keys(personalityPreset || {}));
+    const brand_personality = allowed_personalities.has(raw_personality)
+      ? raw_personality
+      : "";
+
     const services = sanitizeList(body.services, 20, 80);
 
     if (!business_name || !sector || !website_goal) {
@@ -253,14 +270,15 @@ export default async function handler(req, res) {
       services,
       tone,
       seed,
+      ...(brand_personality ? { brand_personality } : {}),
 
-      // NUEVO: objetivo ya normalizado
+      // objetivo ya normalizado
       goal,
     };
 
     let site_spec = await generateSiteV2(client_brief);
 
-    // ✅ NUEVO: aplica personalidad automática (premium)
+    // Aplica personalidad automática, PERO respeta override si ya existe
     site_spec = applyAutoPersonality(site_spec);
 
     res.status(200).json(site_spec);
