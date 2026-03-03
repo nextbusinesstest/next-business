@@ -117,6 +117,15 @@ function getIP(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
+function isInternalLabBypass(req) {
+  // ✅ SOLO en dev / no-production y SOLO si viene marcado como request interno desde Lab
+  const env = process.env.NODE_ENV || "development";
+  if (env === "production") return false;
+
+  const h = req.headers["x-nb-internal"];
+  return String(h || "") === "1";
+}
+
 function rateLimit(req, res) {
   const now = Date.now();
   const ip = getIP(req);
@@ -211,8 +220,13 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Rate limit baseline
-  if (!rateLimit(req, res)) return;
+  // Rate limit baseline (bypass SOLO para Lab en dev)
+  if (!isInternalLabBypass(req)) {
+    if (!rateLimit(req, res)) return;
+  } else {
+    // Para debug, marcamos que se ha bypassed
+    res.setHeader("X-NB-RateLimit-Bypass", "1");
+  }
 
   try {
     const body = req.body || {};
@@ -229,13 +243,11 @@ export default async function handler(req, res) {
     const tone = clampStr(body.tone, 24);
     const seed = clampStr(body.seed, 24);
 
-    // brand_personality override (from Lab/brief). Must be allowlisted.
+    // brand_personality override (from Lab/brief). Allow if personalityPreset recognizes it.
     const raw_personality = clampStr(
       body.brand_personality ?? body?.brand?.brand_personality,
       40
     );
-    
-    // brand_personality override (from Lab/brief). Allow if personalityPreset recognizes it.
     const preset = raw_personality ? personalityPreset(raw_personality) : null;
     const brand_personality = preset ? raw_personality : "";
 
