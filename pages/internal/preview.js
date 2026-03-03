@@ -46,6 +46,17 @@ export default function PreviewPage() {
     const c = spec?.brand?.design_tokens?.colors;
     if (!c) return {};
 
+    // IMPORTANT (Bloque 6):
+    // No queremos que design_tokens.colors machaque el theme por defecto.
+    // Solo aplicamos estos CSS vars si el spec lo marca como override explícito.
+    const wantsOverride =
+      c._override === true ||
+      c.__override === true ||
+      c.override_theme === true ||
+      String(c.mode || "").toLowerCase() === "override";
+
+    if (!wantsOverride) return {};
+
     const primary = c.primary ?? c.primaryColor;
     const secondary = c.secondary ?? c.secondaryColor;
     const bg = c.background ?? c.backgroundColor;
@@ -90,11 +101,11 @@ export default function PreviewPage() {
         <link rel="icon" type="image/png" href={favicon} />
       </Head>
 
-      <div style={cssVars} className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]">
+      <div style={cssVars} className="nb-root min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]">
         <PacksRouter spec={spec} />
 
         {debug ? (
-          <div className="fixed bottom-4 right-4 z-50 w-[520px] max-h-[70vh] overflow-auto rounded-xl border bg-white/90 p-3 shadow-lg">
+          <div className="fixed bottom-4 right-4 z-50 w-[520px] max-h-[70vh] overflow-auto rounded-xl border bg-[var(--surface)]/95 p-3 shadow-lg">
             <div className="text-xs font-semibold mb-2">DEBUG · site_spec (v2)</div>
             <pre className="text-[10px] leading-4 whitespace-pre-wrap break-words">
               {JSON.stringify(spec, null, 2)}
