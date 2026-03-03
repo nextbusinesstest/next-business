@@ -170,6 +170,10 @@ async function postGenerate(payload) {
   return { ok: r.ok, status: r.status, json, text: txt };
 }
 
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 function getPresetById(id) {
   return PRESETS.find((p) => p.id === id) || PRESETS[0] || null;
 }
@@ -267,7 +271,8 @@ export default function LabPage() {
         for (const per of personalities) {
           const payload = { ...base, brand_personality: per };
           const resp = await postGenerate(payload);
-
+          await sleep(80);
+          
           if (!resp.ok) {
             rows.push({
               preset: p.id,
