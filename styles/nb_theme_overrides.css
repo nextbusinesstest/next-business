@@ -1,0 +1,41 @@
+/* styles/nb_theme_overrides.css
+   Objetivo Bloque 6:
+   - Asegurar legibilidad en temas dark aunque queden clases hardcoded heredadas.
+   - Mantener cambios mínimos (sin reescribir packs).
+
+   Nota: el root del preview debe incluir className="nb-root".
+*/
+
+.nb-root {
+  background: var(--c-bg);
+  color: var(--c-text);
+}
+
+/* Hardcodes típicos que rompen dark */
+.nb-root .text-black,
+.nb-root .text-gray-900,
+.nb-root .text-slate-900,
+.nb-root .text-zinc-900,
+.nb-root .text-neutral-900 {
+  color: var(--c-text) !important;
+}
+
+.nb-root .bg-white,
+.nb-root .bg-gray-50,
+.nb-root .bg-slate-50,
+.nb-root .bg-zinc-50,
+.nb-root .bg-neutral-50 {
+  background-color: var(--surface) !important;
+}
+
+.nb-root .border-gray-200,
+.nb-root .border-slate-200,
+.nb-root .border-zinc-200,
+.nb-root .border-neutral-200 {
+  border-color: var(--border) !important;
+}
+
+/* Pre/debug blocks: aseguran contraste */
+.nb-root pre {
+  color: var(--c-text);
+}
