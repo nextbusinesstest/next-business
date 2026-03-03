@@ -19,6 +19,41 @@ function cx(...classes) {
   return classes.filter(Boolean).join(" ");
 }
 
+// ✅ IMPORTANTE: estos componentes deben estar FUERA del componente principal
+// para evitar remounts y pérdida de foco.
+function Card({ title, subtitle, children }) {
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <div className="px-5 py-4 border-b border-neutral-200">
+        <div className="text-sm font-semibold text-neutral-900">{title}</div>
+        {subtitle ? (
+          <div className="text-xs text-neutral-600 mt-1">{subtitle}</div>
+        ) : null}
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function Label({ children, htmlFor }) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="block text-sm font-medium text-neutral-800 mb-2"
+    >
+      {children}
+    </label>
+  );
+}
+
+const inputBase =
+  "w-full rounded-xl bg-white border border-neutral-200 px-4 py-3 text-sm text-neutral-900 " +
+  "outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400 placeholder:text-neutral-400";
+
+const selectBase =
+  "w-full rounded-xl bg-white border border-neutral-200 px-4 py-3 text-sm text-neutral-900 " +
+  "outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400";
+
 export default function ClientNew() {
   const router = useRouter();
 
@@ -34,6 +69,7 @@ export default function ClientNew() {
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [logoOk, setLogoOk] = useState(true);
 
   const needsGoalDetail = websiteGoal === "other" || websiteGoal === "landing";
 
@@ -100,7 +136,6 @@ export default function ClientNew() {
       }
 
       const spec = await res.json();
-
       localStorage.setItem("nb_last_site_spec", JSON.stringify(spec));
       router.push("/internal/preview");
     } catch (err) {
@@ -110,39 +145,23 @@ export default function ClientNew() {
     }
   }
 
-  const Card = ({ title, subtitle, children }) => (
-    <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
-      <div className="px-5 py-4 border-b border-neutral-200">
-        <div className="text-sm font-semibold text-neutral-900">{title}</div>
-        {subtitle ? (
-          <div className="text-xs text-neutral-600 mt-1">{subtitle}</div>
-        ) : null}
-      </div>
-      <div className="p-5">{children}</div>
-    </div>
-  );
-
-  const Label = ({ children }) => (
-    <label className="block text-sm font-medium text-neutral-800 mb-2">
-      {children}
-    </label>
-  );
-
-  const inputBase =
-    "w-full rounded-xl bg-white border border-neutral-200 px-4 py-3 text-sm text-neutral-900 " +
-    "outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400 placeholder:text-neutral-400";
-
-  const selectBase =
-    "w-full rounded-xl bg-white border border-neutral-200 px-4 py-3 text-sm text-neutral-900 " +
-    "outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400";
-
   return (
     <div className="min-h-screen bg-neutral-50">
       {/* Header NB */}
       <div className="sticky top-0 z-10 border-b border-neutral-200 bg-white/80 backdrop-blur">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-neutral-900" aria-hidden />
+            {logoOk ? (
+              <img
+                src="/logo.png"
+                alt="Next Business"
+                className="h-9 w-9 rounded-xl object-contain bg-white border border-neutral-200"
+                onError={() => setLogoOk(false)}
+              />
+            ) : (
+              <div className="h-9 w-9 rounded-xl bg-neutral-900" aria-hidden />
+            )}
+
             <div>
               <div className="text-sm font-semibold text-neutral-900 leading-none">
                 Next Business
@@ -152,6 +171,7 @@ export default function ClientNew() {
               </div>
             </div>
           </div>
+
           <div className="text-xs text-neutral-500">
             Tiempo estimado: <span className="font-medium">2–3 min</span>
           </div>
@@ -173,8 +193,9 @@ export default function ClientNew() {
           >
             <div className="space-y-5">
               <div>
-                <Label>Nombre del negocio *</Label>
+                <Label htmlFor="businessName">Nombre del negocio *</Label>
                 <input
+                  id="businessName"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   className={inputBase}
@@ -183,8 +204,9 @@ export default function ClientNew() {
               </div>
 
               <div>
-                <Label>Sector / actividad *</Label>
+                <Label htmlFor="sector">Sector / actividad *</Label>
                 <input
+                  id="sector"
                   value={sector}
                   onChange={(e) => setSector(e.target.value)}
                   className={inputBase}
@@ -194,8 +216,9 @@ export default function ClientNew() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <Label>Ubicación (opcional)</Label>
+                  <Label htmlFor="location">Ubicación (opcional)</Label>
                   <input
+                    id="location"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     className={inputBase}
@@ -204,8 +227,9 @@ export default function ClientNew() {
                 </div>
 
                 <div>
-                  <Label>Público objetivo (opcional)</Label>
+                  <Label htmlFor="targetAudience">Público objetivo (opcional)</Label>
                   <input
+                    id="targetAudience"
                     value={targetAudience}
                     onChange={(e) => setTargetAudience(e.target.value)}
                     className={inputBase}
@@ -258,8 +282,9 @@ export default function ClientNew() {
             subtitle="El objetivo define el arquetipo y la estructura."
           >
             <div>
-              <Label>Objetivo *</Label>
+              <Label htmlFor="websiteGoal">Objetivo *</Label>
               <select
+                id="websiteGoal"
                 value={websiteGoal}
                 onChange={(e) => setWebsiteGoal(e.target.value)}
                 className={selectBase}
@@ -274,8 +299,9 @@ export default function ClientNew() {
 
               {needsGoalDetail && (
                 <div className="mt-5">
-                  <Label>Detalle del objetivo *</Label>
+                  <Label htmlFor="websiteGoalDetail">Detalle del objetivo *</Label>
                   <input
+                    id="websiteGoalDetail"
                     value={websiteGoalDetail}
                     onChange={(e) => setWebsiteGoalDetail(e.target.value)}
                     className={inputBase}
@@ -292,8 +318,9 @@ export default function ClientNew() {
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <Label>Tono (opcional)</Label>
+                <Label htmlFor="tone">Tono (opcional)</Label>
                 <select
+                  id="tone"
                   value={tone}
                   onChange={(e) => setTone(e.target.value)}
                   className={selectBase}
@@ -306,8 +333,9 @@ export default function ClientNew() {
               </div>
 
               <div>
-                <Label>Seed (opcional)</Label>
+                <Label htmlFor="seed">Seed (opcional)</Label>
                 <input
+                  id="seed"
                   value={seed}
                   onChange={(e) => setSeed(e.target.value)}
                   className={inputBase}
