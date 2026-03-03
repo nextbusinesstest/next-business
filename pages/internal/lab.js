@@ -156,7 +156,10 @@ function pickQA(spec) {
 async function postGenerate(payload) {
   const r = await fetch("/api/generate-site", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "x-nb-internal": "1",
+    },
     body: JSON.stringify(payload),
   });
   const txt = await r.text();
