@@ -118,12 +118,25 @@ function getIP(req) {
 }
 
 function isInternalLabBypass(req) {
-  // ✅ SOLO en dev / no-production y SOLO si viene marcado como request interno desde Lab
+  // ✅ SOLO en dev (no production)
   const env = process.env.NODE_ENV || "development";
   if (env === "production") return false;
 
+  // Next.js normaliza headers a minúsculas
   const h = req.headers["x-nb-internal"];
-  return String(h || "") === "1";
+  if (String(h || "") === "1") return true;
+
+  // fallback: si viene del propio host (localhost) en dev, también permitimos.
+  // Esto evita casos raros donde un fetch pierda headers por un wrapper.
+  const referer = String(req.headers["referer"] || "");
+  const origin = String(req.headers["origin"] || "");
+  const looksLocal =
+    referer.includes("localhost") ||
+    referer.includes("127.0.0.1") ||
+    origin.includes("localhost") ||
+    origin.includes("127.0.0.1");
+
+  return looksLocal;
 }
 
 function rateLimit(req, res) {
