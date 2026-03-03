@@ -1,6 +1,7 @@
 // pages/internal/lab.js
 import { useEffect, useMemo, useState } from "react";
 import { PRESETS } from "../../lib/lab/presets";
+import { resolveTheme, themeKeyFromPersonality } from "../../lib/themes";
 
 function pretty(obj) {
   try {
@@ -18,7 +19,7 @@ function safeParseJSON(txt) {
   }
 }
 
-// --- Renderer coverage allowlist (debe reflejar PacksRouter actual) ---
+// ---------- Renderer coverage allowlist (debe reflejar PacksRouter actual) ----------
 const SUPPORTED_HERO = new Set([
   "hero_product_minimal_v1",
   "hero_product_split_v1",
@@ -48,27 +49,6 @@ const SUPPORTED_SECTIONS = new Set([
   "contact_split_min_v1",
 ]);
 
-function runValidations(spec) {
-  const sections = spec?.layout?.pages?.home?.sections || [];
-  const mods = spec?.modules || {};
-  const goal = spec?.strategy?.primary_goal;
-  const note = String(mods?.contact_auto?.note || "");
-  const ok = (cond, msg) => ({ ok: !!cond, msg });
-
-  return [
-    ok(spec?.version === "2.0", "spec.version == 2.0"),
-    ok(!!spec?.meta?.site_id, "meta.site_id existe"),
-    ok(!!spec?.layout?.archetype, "layout.archetype existe"),
-    ok(!!spec?.layout?.header_variant, "layout.header_variant existe"),
-    ok(Array.isArray(sections) && sections.length >= 3, "home.sections existe y tiene >=3"),
-    ok(!!mods?.hero_auto?.headline, "modules.hero_auto.headline existe"),
-    ok(!!mods?.contact_auto?.note, "modules.contact_auto.note existe"),
-    ok(goal !== "single_action" || sections.some((x) => x.module === "steps"), "single_action incluye steps"),
-    ok(goal !== "book_appointments" || sections.some((x) => x.module === "steps"), "book_appointments incluye steps"),
-    ok(!note.toLowerCase().includes("solicita solicitar"), "No hay duplicado 'Solicita Solicitar...'"),
-  ];
-}
-
 function validateRenderCoverage(spec) {
   const sections = spec?.layout?.pages?.home?.sections || [];
   const missing = [];
@@ -81,28 +61,29 @@ function validateRenderCoverage(spec) {
       if (!SUPPORTED_SECTIONS.has(s.variant)) missing.push({ module: s.module, variant: s.variant });
     }
   }
-
   return missing;
 }
 
+// ---------- Dark contrast heuristic ----------
 function clampHex(x) {
   const s = String(x || "").trim();
   return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s) ? s : "";
 }
 
-// Heurística simple: si bg es muy oscuro, text debe ser claro
 function approxLuma(hex) {
   const h = clampHex(hex);
   if (!h) return null;
-  const v = h.length === 4
-    ? [h[1] + h[1], h[2] + h[2], h[3] + h[3]]
-    : [h.slice(1, 3), h.slice(3, 5), h.slice(5, 7)];
+  const v =
+    h.length === 4
+      ? [h[1] + h[1], h[2] + h[2], h[3] + h[3]]
+      : [h.slice(1, 3), h.slice(3, 5), h.slice(5, 7)];
   const [r, g, b] = v.map((x) => parseInt(x, 16) / 255);
-  // relative luminance (approx)
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 function validateDarkContrast(spec) {
+  // Nota: esto valida colors del spec. La legibilidad real depende de hardcodes,
+  // pero sirve como detector rápido de "bg oscuro + texto oscuro" (fatal).
   const c = spec?.brand?.design_tokens?.colors || {};
   const bg = c.bg || c.background || c.backgroundColor;
   const text = c.text || c.textColor;
@@ -111,12 +92,55 @@ function validateDarkContrast(spec) {
   const Lt = approxLuma(text);
   if (Lbg == null || Lt == null) return { ok: true, note: "no-check" };
 
-  // si bg oscuro (<0.25), el texto debería ser claramente más claro
   if (Lbg < 0.25) {
     const ok = Lt > 0.65;
     return { ok, note: ok ? "dark-ok" : "dark-bad-text" };
   }
   return { ok: true, note: "light-ok" };
+}
+
+// ---------- Theme validation (importante para Bloque 6) ----------
+const REQUIRED_THEME_VARS = ["--surface", "--border", "--shadow", "--r-md", "--section-py"];
+
+function validateTheme(spec) {
+  const personality = spec?.brand?.brand_personality || "";
+  const expectedKey = themeKeyFromPersonality(personality);
+
+  let theme;
+  try {
+    theme = resolveTheme(spec);
+  } catch {
+    theme = null;
+  }
+
+  const actualKey = theme?.name || "";
+  const vars = theme?.vars || {};
+
+  const missingVars = REQUIRED_THEME_VARS.filter((k) => !(k in vars));
+  const keyOk = !expectedKey || !actualKey ? true : expectedKey === actualKey;
+
+  // También validamos que no sea “todo igual” a nivel de feel:
+  // si el theme devuelve siempre los mismos r/shadow/surface, no diferencia.
+  const signature = [
+    vars["--surface"],
+    vars["--border"],
+    vars["--shadow"],
+    vars["--r-md"],
+    vars["--section-py"],
+    vars["--c-bg"],
+    vars["--c-text"],
+    vars["--c-accent"],
+  ]
+    .map((x) => String(x || ""))
+    .join("|");
+
+  return {
+    expectedKey,
+    actualKey,
+    keyOk,
+    missingVars,
+    signature,
+  };
 }
 
 function pickQA(spec) {
@@ -126,7 +150,6 @@ function pickQA(spec) {
   const archetype = spec?.layout?.archetype || "";
   const header = spec?.layout?.header_variant || "";
   const personality = spec?.brand?.brand_personality || "";
-
   return { goal, goalDetail, pack, archetype, header, personality };
 }
 
@@ -138,12 +161,19 @@ async function postGenerate(payload) {
   });
   const txt = await r.text();
   let json = null;
-  try { json = JSON.parse(txt); } catch {}
+  try {
+    json = JSON.parse(txt);
+  } catch {}
   return { ok: r.ok, status: r.status, json, text: txt };
 }
 
+function getPresetById(id) {
+  return PRESETS.find((p) => p.id === id) || PRESETS[0] || null;
+}
+
 export default function LabPage() {
-  const [presetKey, setPresetKey] = useState(Object.keys(PRESETS)[0] || "");
+  const presetIds = useMemo(() => PRESETS.map((p) => p.id), []);
+  const [presetId, setPresetId] = useState(presetIds[0] || "");
   const [personality, setPersonality] = useState("modern_minimal");
 
   const [payloadText, setPayloadText] = useState("");
@@ -154,20 +184,22 @@ export default function LabPage() {
   const [sweepBusy, setSweepBusy] = useState(false);
   const [sweepRows, setSweepRows] = useState([]);
 
-  const preset = PRESETS[presetKey];
+  const preset = useMemo(() => getPresetById(presetId), [presetId]);
 
   useEffect(() => {
     if (!preset) return;
     const base = preset.brief || preset;
     const withP = { ...base, brand_personality: personality };
     setPayloadText(pretty(withP));
-  }, [presetKey, personality]);
+  }, [presetId, personality]);
 
-  const validations = useMemo(() => (resultSpec ? runValidations(resultSpec) : []), [resultSpec]);
   const qa = useMemo(() => (resultSpec ? pickQA(resultSpec) : null), [resultSpec]);
-
   const coverage = useMemo(() => (resultSpec ? validateRenderCoverage(resultSpec) : []), [resultSpec]);
-  const darkCheck = useMemo(() => (resultSpec ? validateDarkContrast(resultSpec) : { ok: true, note: "no" }), [resultSpec]);
+  const darkCheck = useMemo(
+    () => (resultSpec ? validateDarkContrast(resultSpec) : { ok: true, note: "no" }),
+    [resultSpec]
+  );
+  const themeCheck = useMemo(() => (resultSpec ? validateTheme(resultSpec) : null), [resultSpec]);
 
   async function onGenerate() {
     const parsed = safeParseJSON(payloadText);
@@ -186,7 +218,6 @@ export default function LabPage() {
       setResultRaw(resp.ok ? pretty(resp.json) : resp.text || `HTTP ${resp.status}`);
       if (resp.ok) {
         setResultSpec(resp.json);
-        // guardar en localStorage para preview
         try {
           localStorage.setItem("nb_last_site_spec", JSON.stringify(resp.json));
         } catch {}
@@ -196,8 +227,16 @@ export default function LabPage() {
     }
   }
 
-  async function onSweep() {
-    // Sweep rápido: 2 presets (si existen) y todas las personalidades “principales”
+  function loadToPreview(spec) {
+    try {
+      localStorage.setItem("nb_last_site_spec", JSON.stringify(spec));
+      window.open("/internal/preview", "_blank");
+    } catch {
+      alert("No se pudo guardar en localStorage.");
+    }
+  }
+
+  async function onSweepAll() {
     const personalities = [
       "modern_minimal",
       "premium_elegant",
@@ -211,31 +250,14 @@ export default function LabPage() {
       "dark_luxury",
     ];
 
-    // Intentamos detectar presets típicos
-    const allPresetKeys = Object.keys(PRESETS);
-    const clinicKey =
-      allPresetKeys.find((k) => k.toLowerCase().includes("clinic")) ||
-      allPresetKeys.find((k) => k.toLowerCase().includes("clin")) ||
-      allPresetKeys[0];
-
-    const ecommerceKey =
-      allPresetKeys.find((k) => k.toLowerCase().includes("ecom")) ||
-      allPresetKeys.find((k) => k.toLowerCase().includes("shop")) ||
-      allPresetKeys[0];
-
-    const sweepTargets = [
-      { label: "clinic", presetKey: clinicKey },
-      { label: "ecommerce", presetKey: ecommerceKey },
-    ];
-
     setSweepBusy(true);
     setSweepRows([]);
 
     const rows = [];
+    const sigByPreset = new Map(); // presetId -> set(signature) para ver si hay diferenciación real
 
     try {
-      for (const target of sweepTargets) {
-        const p = PRESETS[target.presetKey];
+      for (const p of PRESETS) {
         const base = p?.brief || p;
         if (!base) continue;
 
@@ -245,49 +267,89 @@ export default function LabPage() {
 
           if (!resp.ok) {
             rows.push({
-              target: target.label,
+              preset: p.id,
+              label: p.label || p.id,
               personality: per,
               ok: false,
               status: resp.status,
-              missing: ["HTTP_ERROR"],
-              dark: "n/a",
               pack: "",
               archetype: "",
+              dark: "n/a",
+              missing: ["HTTP_ERROR"],
+              themeKeyOk: false,
+              themeMissingVars: ["THEME_ERROR"],
+              signature: "",
+              spec: null,
             });
             setSweepRows([...rows]);
             continue;
           }
 
           const spec = resp.json;
-          const missing = validateRenderCoverage(spec);
+          const miss = validateRenderCoverage(spec);
           const dark = validateDarkContrast(spec);
           const qa = pickQA(spec);
+          const t = validateTheme(spec);
+
+          const isOk =
+            miss.length === 0 &&
+            dark.ok &&
+            t.keyOk &&
+            (t.missingVars?.length || 0) === 0;
+
+          const signature = t.signature || "";
+          const set = sigByPreset.get(p.id) || new Set();
+          set.add(signature);
+          sigByPreset.set(p.id, set);
 
           rows.push({
-            target: target.label,
+            preset: p.id,
+            label: p.label || p.id,
             personality: per,
-            ok: missing.length === 0 && dark.ok,
+            ok: isOk,
             status: 200,
-            missing: missing.map((x) => `${x.module}:${x.variant}`),
-            dark: dark.note,
             pack: qa.pack,
             archetype: qa.archetype,
+            dark: dark.note,
+            missing: miss.map((x) => `${x.module}:${x.variant}`),
+            themeKeyOk: t.keyOk,
+            themeMissingVars: t.missingVars || [],
+            signature,
+            spec, // guardamos el spec para “Load to preview”
           });
 
+          // actualiza incremental (feedback rápido)
           setSweepRows([...rows]);
         }
       }
+
+      // Post-check: diferenciación real por preset (si todos los signatures son iguales, “solo cambia color” o nada)
+      const annotated = rows.map((r) => {
+        const uniq = sigByPreset.get(r.preset)?.size || 0;
+        return { ...r, styleVarianceCount: uniq };
+      });
+
+      setSweepRows(annotated);
     } finally {
       setSweepBusy(false);
     }
   }
+
+  const sweepSummary = useMemo(() => {
+    if (!sweepRows.length) return null;
+    const total = sweepRows.length;
+    const ok = sweepRows.filter((r) => r.ok).length;
+    const bad = total - ok;
+    const varianceBad = sweepRows.filter((r) => (r.styleVarianceCount || 0) <= 1).length;
+    return { total, ok, bad, varianceBad };
+  }, [sweepRows]);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-5 py-8">
         <h1 className="text-2xl font-semibold">Internal Lab</h1>
         <p className="text-sm text-gray-600 mt-1">
-          Genera site_spec V2, valida invariantes y comprueba cobertura de renderers (rápido).
+          Genera site_spec V2, valida renderers + dark, y ejecuta Sweep completo: todos los presets × personalidades.
         </p>
 
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -295,12 +357,12 @@ export default function LabPage() {
             <div className="text-sm font-semibold mb-2">Preset</div>
             <select
               className="w-full border rounded-xl px-3 py-2 text-sm"
-              value={presetKey}
-              onChange={(e) => setPresetKey(e.target.value)}
+              value={presetId}
+              onChange={(e) => setPresetId(e.target.value)}
             >
-              {Object.keys(PRESETS).map((k) => (
-                <option key={k} value={k}>
-                  {k}
+              {PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label || p.id}
                 </option>
               ))}
             </select>
@@ -346,12 +408,28 @@ export default function LabPage() {
 
             <button
               className="mt-3 w-full rounded-xl border py-2 text-sm font-semibold bg-white hover:bg-gray-50 disabled:opacity-50"
-              onClick={onSweep}
+              onClick={onSweepAll}
               disabled={sweepBusy}
-              title="Genera clinic + ecommerce para todas las personalidades y reporta fallos"
+              title="Genera TODOS los presets para TODAS las personalidades y reporta fallos"
             >
-              {sweepBusy ? "Running sweep..." : "Run Sweep (clinic + ecommerce)"}
+              {sweepBusy ? "Running full sweep..." : "Run FULL Sweep (all presets × personalities)"}
             </button>
+
+            {sweepSummary ? (
+              <div className="mt-4 text-sm">
+                <div>
+                  <b>Total:</b> {sweepSummary.total} · <b>OK:</b> {sweepSummary.ok} ·{" "}
+                  <b>Fail:</b> {sweepSummary.bad}
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  “VarianceBad” = presets donde todas las personalities producen el mismo “signature” visual (posible
+                  “solo cambia color”).
+                </div>
+                <div className="text-sm mt-1">
+                  <b>VarianceBad:</b> {sweepSummary.varianceBad}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="bg-white border rounded-2xl p-4 md:col-span-2">
@@ -362,56 +440,71 @@ export default function LabPage() {
               onChange={(e) => setPayloadText(e.target.value)}
             />
             <div className="text-xs text-gray-500 mt-2">
-              Tip: esto se envía tal cual a <code>/api/generate-site</code>.
+              Esto se envía tal cual a <code>/api/generate-site</code>.
             </div>
           </div>
         </div>
 
         {resultSpec ? (
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white border rounded-2xl p-4">
-              <div className="text-sm font-semibold">QA</div>
-              <div className="mt-2 text-sm text-gray-700">
-                <div><b>pack</b>: {qa?.pack}</div>
-                <div><b>archetype</b>: {qa?.archetype}</div>
-                <div><b>header</b>: {qa?.header}</div>
-                <div><b>personality</b>: {qa?.personality}</div>
+          <div className="mt-6 bg-white border rounded-2xl p-4">
+            <div className="text-sm font-semibold">Checks (último generate)</div>
+
+            <div className="mt-2 text-sm text-gray-700">
+              <div><b>preset</b>: {preset?.id}</div>
+              <div><b>pack</b>: {qa?.pack}</div>
+              <div><b>archetype</b>: {qa?.archetype}</div>
+              <div><b>header</b>: {qa?.header}</div>
+              <div><b>personality</b>: {qa?.personality}</div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div className="rounded-xl border p-3">
+                <div className="font-semibold">Renderer coverage</div>
+                {coverage.length === 0 ? (
+                  <div className="mt-2 text-green-700">✓ Todo renderizable</div>
+                ) : (
+                  <div className="mt-2 text-red-700">
+                    ✗ Missing:
+                    <ul className="mt-1 list-disc pl-5">
+                      {coverage.map((m, i) => (
+                        <li key={i}>{m.module}: <b>{m.variant}</b></li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
-              <div className="mt-4 text-sm font-semibold">Validations</div>
-              <ul className="mt-2 space-y-1 text-sm">
-                {validations.map((v, i) => (
-                  <li key={i} className={v.ok ? "text-green-700" : "text-red-700"}>
-                    {v.ok ? "✓" : "✗"} {v.msg}
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-4 text-sm font-semibold">Renderer coverage</div>
-              {coverage.length === 0 ? (
-                <div className="mt-2 text-green-700 text-sm">✓ Todo renderizable</div>
-              ) : (
-                <div className="mt-2 text-red-700 text-sm">
-                  ✗ Missing renderers:
-                  <ul className="mt-1 list-disc pl-5">
-                    {coverage.map((m, i) => (
-                      <li key={i}>
-                        {m.module}: <b>{m.variant}</b>
-                      </li>
-                    ))}
-                  </ul>
+              <div className="rounded-xl border p-3">
+                <div className="font-semibold">Dark heuristic</div>
+                <div className={darkCheck.ok ? "mt-2 text-green-700" : "mt-2 text-red-700"}>
+                  {darkCheck.ok ? "✓" : "✗"} {darkCheck.note}
                 </div>
-              )}
+              </div>
 
-              <div className="mt-4 text-sm font-semibold">Dark contrast (heurístico)</div>
-              <div className={darkCheck.ok ? "mt-2 text-green-700 text-sm" : "mt-2 text-red-700 text-sm"}>
-                {darkCheck.ok ? "✓" : "✗"} {darkCheck.note}
+              <div className="rounded-xl border p-3">
+                <div className="font-semibold">Theme integrity</div>
+                {themeCheck ? (
+                  <div className="mt-2">
+                    <div className={themeCheck.keyOk ? "text-green-700" : "text-red-700"}>
+                      {themeCheck.keyOk ? "✓" : "✗"} themeKey: {themeCheck.actualKey} (esperado {themeCheck.expectedKey})
+                    </div>
+                    {themeCheck.missingVars?.length ? (
+                      <div className="text-red-700 mt-1">
+                        Missing vars: {themeCheck.missingVars.join(", ")}
+                      </div>
+                    ) : (
+                      <div className="text-green-700 mt-1">✓ vars premium OK</div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-2 text-gray-600">n/a</div>
+                )}
               </div>
             </div>
 
-            <div className="bg-white border rounded-2xl p-4">
+            <div className="mt-4">
               <div className="text-sm font-semibold mb-2">Result (response spec)</div>
-              <pre className="w-full h-[420px] overflow-auto border rounded-xl p-3 text-xs bg-gray-50">
+              <pre className="w-full max-h-[420px] overflow-auto border rounded-xl p-3 text-xs bg-gray-50">
                 {resultRaw}
               </pre>
             </div>
@@ -429,42 +522,77 @@ export default function LabPage() {
 
         {sweepRows.length ? (
           <div className="mt-8 bg-white border rounded-2xl p-4">
-            <div className="text-sm font-semibold mb-3">Sweep results</div>
+            <div className="text-sm font-semibold mb-3">FULL Sweep results</div>
             <div className="overflow-auto">
-              <table className="min-w-[900px] w-full text-sm">
+              <table className="min-w-[1200px] w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-600">
-                    <th className="py-2 pr-4">target</th>
+                    <th className="py-2 pr-4">preset</th>
                     <th className="py-2 pr-4">personality</th>
                     <th className="py-2 pr-4">pack</th>
                     <th className="py-2 pr-4">archetype</th>
                     <th className="py-2 pr-4">dark</th>
                     <th className="py-2 pr-4">missing</th>
+                    <th className="py-2 pr-4">theme</th>
+                    <th className="py-2 pr-4">variance</th>
+                    <th className="py-2 pr-4">preview</th>
                     <th className="py-2 pr-4">status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sweepRows.map((r, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="py-2 pr-4">{r.target}</td>
-                      <td className="py-2 pr-4 font-mono">{r.personality}</td>
-                      <td className="py-2 pr-4 font-mono">{r.pack}</td>
-                      <td className="py-2 pr-4 font-mono">{r.archetype}</td>
-                      <td className={`py-2 pr-4 ${r.dark === "dark-bad-text" ? "text-red-700" : "text-gray-700"}`}>
-                        {r.dark}
-                      </td>
-                      <td className={`py-2 pr-4 ${r.missing.length ? "text-red-700" : "text-green-700"}`}>
-                        {r.missing.length ? r.missing.join(", ") : "✓"}
-                      </td>
-                      <td className="py-2 pr-4">{r.status}</td>
-                    </tr>
-                  ))}
+                  {sweepRows.map((r, i) => {
+                    const missTxt = r.missing?.length ? r.missing.join(", ") : "✓";
+                    const missBad = r.missing?.length;
+                    const themeBad = !r.themeKeyOk || (r.themeMissingVars?.length || 0) > 0;
+                    const varianceBad = (r.styleVarianceCount || 0) <= 1;
+
+                    return (
+                      <tr key={i} className="border-t">
+                        <td className="py-2 pr-4">{r.preset}</td>
+                        <td className="py-2 pr-4 font-mono">{r.personality}</td>
+                        <td className="py-2 pr-4 font-mono">{r.pack}</td>
+                        <td className="py-2 pr-4 font-mono">{r.archetype}</td>
+
+                        <td className={`py-2 pr-4 ${r.dark === "dark-bad-text" ? "text-red-700" : "text-gray-700"}`}>
+                          {r.dark}
+                        </td>
+
+                        <td className={`py-2 pr-4 ${missBad ? "text-red-700" : "text-green-700"}`}>
+                          {missTxt}
+                        </td>
+
+                        <td className={`py-2 pr-4 ${themeBad ? "text-red-700" : "text-green-700"}`}>
+                          {themeBad ? "✗" : "✓"}
+                        </td>
+
+                        <td className={`py-2 pr-4 ${varianceBad ? "text-amber-700" : "text-green-700"}`}>
+                          {r.styleVarianceCount || 0}
+                        </td>
+
+                        <td className="py-2 pr-4">
+                          {r.spec ? (
+                            <button
+                              className="rounded-lg border px-2 py-1 text-xs bg-white hover:bg-gray-50"
+                              onClick={() => loadToPreview(r.spec)}
+                            >
+                              Load
+                            </button>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+
+                        <td className="py-2 pr-4">{r.status}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             <div className="text-xs text-gray-500 mt-3">
-              Nota: “missing” detecta variantes no soportadas por el renderer actual (allowlist).
+              - “theme ✓” valida que el theme elegido corresponde a la personality y trae variables premium. <br />
+              - “variance” = nº de signatures diferentes por preset (si es 1, probablemente “se ve igual”).
             </div>
           </div>
         ) : null}
