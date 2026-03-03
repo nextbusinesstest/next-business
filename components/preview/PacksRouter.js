@@ -127,33 +127,80 @@ function safeToStyleVars(vars) {
 function applyArchetypeOverrides(vars, archetype) {
   const v = { ...(vars || {}) };
 
+  // --- helpers: detectar si el theme es "dark" por luminancia de --c-bg
+  function clampHex(x) {
+    const s = String(x || "").trim();
+    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s) ? s : "";
+  }
+
+  function hexToRgb01(hex) {
+    const h = clampHex(hex);
+    if (!h) return null;
+    const parts =
+      h.length === 4
+        ? [h[1] + h[1], h[2] + h[2], h[3] + h[3]]
+        : [h.slice(1, 3), h.slice(3, 5), h.slice(5, 7)];
+    const [r, g, b] = parts.map((p) => parseInt(p, 16) / 255);
+    return { r, g, b };
+  }
+
+  function luma(hex) {
+    const rgb = hexToRgb01(hex);
+    if (!rgb) return null;
+    // luminancia relativa aproximada (suficiente para decidir dark/light)
+    return 0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b;
+  }
+
+  const bg = v["--c-bg"];
+  const L = luma(bg);
+  const isDark = L != null && L < 0.25;
+
+  // ============================================================
+  // Archetype overrides
+  // ============================================================
+
   if (archetype === "saas_landing_v1") {
     v["--section-py"] = "52px";
-    v["--surface-2"] = "#f6f7fb";
-    v["--border"] = "#e6e8f0";
-    v["--shadow"] = "0_24px_70px_rgba(2,6,23,0.14)";
+    v["--shadow"] = isDark
+      ? "0_28px_95px_rgba(0,0,0,0.55)"
+      : "0_24px_70px_rgba(2,6,23,0.14)";
     v["--r-sm"] = "14px";
     v["--r-md"] = "18px";
     v["--r-lg"] = "26px";
+
+    // ✅ CRÍTICO: no forzar surface/border claros en dark
+    if (!isDark) {
+      v["--surface-2"] = "#f6f7fb";
+      v["--border"] = "#e6e8f0";
+    }
   }
 
   if (archetype === "booking_trust_v1") {
     v["--section-py"] = "72px";
-    v["--surface-2"] = "#f7fafc";
-    v["--border"] = "#e2e8f0";
-    v["--shadow"] = "0_18px_55px_rgba(15,23,42,0.10)";
+    v["--shadow"] = isDark
+      ? "0_24px_85px_rgba(0,0,0,0.45)"
+      : "0_18px_55px_rgba(15,23,42,0.10)";
     v["--r-sm"] = "16px";
     v["--r-md"] = "20px";
     v["--r-lg"] = "28px";
+
+    // mismo enfoque: solo en light
+    if (!isDark) {
+      v["--surface-2"] = "#f7fafc";
+      v["--border"] = "#e2e8f0";
+    }
   }
 
-  // ✅ Ecommerce premium: un pelín más “producto”
+  // ✅ Ecommerce premium: mantener feel “producto”
   if (archetype === "ecommerce_premium_v1") {
     v["--section-py"] = "56px";
-    v["--shadow"] = "0_22px_70px_rgba(2,6,23,0.18)";
+    v["--shadow"] = isDark
+      ? "0_28px_100px_rgba(0,0,0,0.55)"
+      : "0_22px_70px_rgba(2,6,23,0.18)";
     v["--r-sm"] = "14px";
     v["--r-md"] = "18px";
     v["--r-lg"] = "28px";
+    // aquí NO tocamos surface-2/border nunca (que venga del theme)
   }
 
   return v;
