@@ -11,6 +11,11 @@ export default function PreviewPage() {
   const [spec, setSpec] = useState(null);
   const [debug, setDebug] = useState(false);
 
+  // publish state
+  const [publishing, setPublishing] = useState(false);
+  const [publishUrl, setPublishUrl] = useState("");
+  const [publishErr, setPublishErr] = useState("");
+
   useEffect(() => {
     // Toggle debug con ?debug=1
     try {
@@ -72,6 +77,36 @@ export default function PreviewPage() {
     };
   }, [spec]);
 
+  async function publishCurrentSpec() {
+    if (!spec) return;
+
+    setPublishing(true);
+    setPublishErr("");
+    setPublishUrl("");
+
+    try {
+      const r = await fetch("/api/sites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site_spec: spec }),
+      });
+
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+
+      // data: { id, url }
+      setPublishUrl(data?.url || "");
+      if (data?.url) {
+        // abre en nueva pestaña
+        window.open(data.url, "_blank", "noopener,noreferrer");
+      }
+    } catch (e) {
+      setPublishErr(e?.message || "Publish failed");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   if (!spec) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center px-6">
@@ -102,6 +137,57 @@ export default function PreviewPage() {
       </Head>
 
       <div style={cssVars} className="nb-root min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]">
+        {/* Top bar (internal) */}
+        <div className="sticky top-0 z-40 border-b border-neutral-200/60 bg-white/70 backdrop-blur">
+          <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-xs text-neutral-500">Preview</div>
+              <div className="text-sm font-semibold text-neutral-900 truncate">
+                {spec?.business?.name || spec?.meta?.title || spec?.meta?.site_id || "Site"}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {publishUrl ? (
+                <a
+                  href={publishUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
+                  title="Abrir web pública"
+                >
+                  Open public
+                </a>
+              ) : null}
+
+              <button
+                onClick={publishCurrentSpec}
+                disabled={publishing}
+                className="text-xs font-semibold rounded-lg bg-neutral-900 text-white px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
+                title="Publicar este site_spec como /s/<site_id>"
+              >
+                {publishing ? "Publishing…" : "Publish"}
+              </button>
+            </div>
+          </div>
+
+          {(publishErr || publishUrl) ? (
+            <div className="max-w-6xl mx-auto px-6 pb-3">
+              {publishErr ? (
+                <div className="text-xs rounded-xl border border-red-200 bg-red-50 text-red-800 px-3 py-2">
+                  {publishErr}
+                </div>
+              ) : null}
+
+              {publishUrl ? (
+                <div className="text-xs rounded-xl border border-green-200 bg-green-50 text-green-800 px-3 py-2 mt-2">
+                  Publicado: <code className="font-semibold">{publishUrl}</code>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
         <PacksRouter spec={spec} />
 
         {debug ? (
