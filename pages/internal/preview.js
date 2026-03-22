@@ -1,24 +1,9 @@
 import Head from "next/head";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import PacksRouter from "../../components/preview/PacksRouter";
-
-import { v1ToV2 } from "../../lib/spec/adapters/v1_to_v2";
-import { normalizeV2 } from "../../lib/spec/v2/normalize";
-import { resolveV2Layout } from "../../lib/spec/v2/resolveLayout";
-
-const PERSONALITIES = [
-  "modern_minimal",
-  "premium_elegant",
-  "trust_authority",
-  "clinical_calm",
-  "service_local_friendly",
-  "tech_clean",
-  "bold_street",
-  "artisan_warm",
-  "industrial_solid",
-  "dark_luxury",
-];
+function cx(...c) {
+  return c.filter(Boolean).join(" ");
+}
 
 function sanitizeId(id) {
   return (id ?? "")
@@ -46,663 +31,354 @@ function buildDuplicateId(baseId) {
   return `${clean}-copy-${stamp}`.slice(0, 80);
 }
 
-function safeTrim(v) {
-  return (v ?? "").toString().trim();
+async function fetchSiteSpec(id) {
+  const r = await fetch(`/api/sites/${encodeURIComponent(id)}`);
+  const txt = await r.text();
+  let json = null;
+  try {
+    json = JSON.parse(txt);
+  } catch {}
+  if (!r.ok) {
+    throw new Error(json?.error || `HTTP ${r.status}`);
+  }
+  return json;
 }
 
-function chooseHeaderVariant(archetype, personality, currentHeader) {
-  if (
-    archetype === "booking_trust_v1" ||
-    personality === "trust_authority" ||
-    personality === "clinical_calm" ||
-    personality === "industrial_solid"
-  ) {
-    return "header_trust_v1";
-  }
+export default function InternalSites() {
+  const [items, setItems] = useState([]);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [busyKey, setBusyKey] = useState("");
 
-  if (currentHeader === "header_trust_v1") {
-    return "header_minimal_v1";
-  }
-
-  return currentHeader || "header_minimal_v1";
-}
-
-function getDraftFromSpec(spec) {
-  return {
-    siteId: spec?.meta?.site_id || "",
-    businessName: spec?.business?.name || "",
-    sector: spec?.business?.sector || "",
-    location: spec?.business?.location || "",
-    targetAudience: spec?.business?.target_audience || "",
-    personality: spec?.brand?.brand_personality || "modern_minimal",
-
-    seoTitle: spec?.seo?.title || "",
-    seoDescription: spec?.seo?.description || "",
-
-    heroHeadline: spec?.modules?.hero_auto?.headline || "",
-    heroSubheadline: spec?.modules?.hero_auto?.subheadline || "",
-    heroPrimaryCta: spec?.modules?.hero_auto?.cta_primary || "",
-    heroSecondaryCta: spec?.modules?.hero_auto?.cta_secondary || "",
-
-    contactTitle: spec?.modules?.contact_auto?.title || "",
-    contactNote: spec?.modules?.contact_auto?.note || "",
-  };
-}
-
-function applyDraftToSpec(baseSpec, draft) {
-  const next = JSON.parse(JSON.stringify(baseSpec || {}));
-
-  next.meta = next.meta || {};
-  next.business = next.business || {};
-  next.brand = next.brand || {};
-  next.layout = next.layout || {};
-  next.modules = next.modules || {};
-  next.modules.hero_auto = next.modules.hero_auto || {};
-  next.modules.contact_auto = next.modules.contact_auto || {};
-  next.seo = next.seo || {};
-  next.contact = next.contact || {};
-
-  const siteId = sanitizeId(draft.siteId) || next.meta.site_id || "site";
-  const businessName = safeTrim(draft.businessName) || next.business.name || "";
-  const sector = safeTrim(draft.sector);
-  const location = safeTrim(draft.location);
-  const targetAudience = safeTrim(draft.targetAudience);
-  const personality = safeTrim(draft.personality) || next.brand.brand_personality || "modern_minimal";
-
-  next.meta.site_id = siteId;
-
-  next.business.name = businessName;
-  next.business.sector = sector;
-  next.business.location = location;
-  next.business.target_audience = targetAudience;
-
-  next.brand.brand_personality = personality;
-
-  next.layout.header_variant = chooseHeaderVariant(
-    next.layout.archetype,
-    personality,
-    next.layout.header_variant
-  );
-
-  next.seo.title = safeTrim(draft.seoTitle) || businessName || next.seo.title || siteId;
-  next.seo.description =
-    safeTrim(draft.seoDescription) ||
-    next.seo.description ||
-    (sector ? `${businessName} · ${sector}` : businessName);
-
-  next.modules.hero_auto.headline =
-    safeTrim(draft.heroHeadline) || next.modules.hero_auto.headline || businessName;
-
-  next.modules.hero_auto.subheadline =
-    safeTrim(draft.heroSubheadline) || next.modules.hero_auto.subheadline || "";
-
-  next.modules.hero_auto.cta_primary =
-    safeTrim(draft.heroPrimaryCta) || next.modules.hero_auto.cta_primary || "";
-
-  next.modules.hero_auto.cta_secondary =
-    safeTrim(draft.heroSecondaryCta) || next.modules.hero_auto.cta_secondary || "";
-
-  next.modules.contact_auto.title =
-    safeTrim(draft.contactTitle) || next.modules.contact_auto.title || "Contacto";
-
-  next.modules.contact_auto.note =
-    safeTrim(draft.contactNote) || next.modules.contact_auto.note || "";
-
-  next.contact.address = location || next.contact.address || "";
-
-  return next;
-}
-
-export default function PreviewPage() {
-  const [spec, setSpec] = useState(null);
-  const [debug, setDebug] = useState(false);
-
-  const [publishing, setPublishing] = useState(false);
-  const [publishUrl, setPublishUrl] = useState("");
-  const [publishErr, setPublishErr] = useState("");
-
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editorMsg, setEditorMsg] = useState("");
-  const [draft, setDraft] = useState({
-    siteId: "",
-    businessName: "",
-    sector: "",
-    location: "",
-    targetAudience: "",
-    personality: "modern_minimal",
-    seoTitle: "",
-    seoDescription: "",
-    heroHeadline: "",
-    heroSubheadline: "",
-    heroPrimaryCta: "",
-    heroSecondaryCta: "",
-    contactTitle: "",
-    contactNote: "",
-  });
-
-  const fileInputRef = useRef(null);
-
-  function normalizeIncomingSpec(rawSpec) {
-    let parsed = rawSpec;
-    if (!parsed?.version || parsed.version === "v1") {
-      parsed = v1ToV2(parsed);
-    }
-    parsed = normalizeV2(parsed);
-    parsed = resolveV2Layout(parsed);
-    return parsed;
-  }
-
-  function saveSpecToLocalStorage(nextSpec) {
-    localStorage.setItem("nb_last_site_spec", JSON.stringify(nextSpec));
-  }
-
-  function loadFromLocalStorage() {
-    const raw = window.localStorage.getItem("nb_last_site_spec");
-    if (!raw) return;
-
+  async function load() {
+    setLoading(true);
+    setErr("");
     try {
-      const parsed = JSON.parse(raw);
-      const normalized = normalizeIncomingSpec(parsed);
-      setSpec(normalized);
-      setDraft(getDraftFromSpec(normalized));
+      const r = await fetch("/api/sites");
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      setItems(Array.isArray(data?.items) ? data.items : []);
     } catch (e) {
-      console.error("Error loading site_spec:", e);
-      setSpec(null);
+      setErr(e?.message || "Error loading sites");
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      setDebug(params.get("debug") === "1");
-    } catch {
-      setDebug(false);
-    }
-
-    loadFromLocalStorage();
+    load();
   }, []);
 
-  const cssVars = useMemo(() => {
-    const c = spec?.brand?.design_tokens?.colors;
-    if (!c) return {};
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return items;
+    return items.filter((it) => {
+      const hay = [
+        it?.id,
+        it?.name,
+        it?.sector,
+        it?.location,
+        it?.goal,
+        it?.pack,
+        it?.archetype,
+        it?.personality,
+        it?.forked_from,
+        it?.revision,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(s);
+    });
+  }, [items, q]);
 
-    const wantsOverride =
-      c._override === true ||
-      c.__override === true ||
-      c.override_theme === true ||
-      String(c.mode || "").toLowerCase() === "override";
-
-    if (!wantsOverride) return {};
-
-    const primary = c.primary ?? c.primaryColor;
-    const secondary = c.secondary ?? c.secondaryColor;
-    const bg = c.background ?? c.backgroundColor;
-    const text = c.text ?? c.textColor;
-    const accent = c.accent ?? c.accentColor;
-
-    return {
-      "--c-primary": primary,
-      "--c-secondary": secondary,
-      "--c-bg": bg,
-      "--c-text": text,
-      "--c-accent": accent,
-    };
-  }, [spec]);
-
-  async function publishCurrentSpec() {
-    if (!spec) return;
-
-    setPublishing(true);
-    setPublishErr("");
-    setPublishUrl("");
-    setEditorMsg("");
+  async function handleLoadToPreview(id) {
+    const key = `load:${id}`;
+    setBusyKey(key);
+    setErr("");
 
     try {
-      const r = await fetch("/api/sites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ site_spec: spec }),
-      });
+      const spec = await fetchSiteSpec(id);
+      localStorage.setItem("nb_last_site_spec", JSON.stringify(spec));
+      window.open("/internal/preview", "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setErr(e?.message || "No se pudo cargar el spec en preview.");
+    } finally {
+      setBusyKey("");
+    }
+  }
 
+  async function handleDuplicate(id) {
+    const key = `dup:${id}`;
+    setBusyKey(key);
+    setErr("");
+
+    try {
+      const spec = await fetchSiteSpec(id);
+      const cloned = JSON.parse(JSON.stringify(spec));
+
+      const newId = buildDuplicateId(cloned?.meta?.site_id || id);
+      cloned.meta = cloned.meta || {};
+      cloned.meta.site_id = newId;
+      cloned.meta.forked_from = id;
+      delete cloned.meta.created_at;
+      delete cloned.meta.updated_at;
+      delete cloned.meta.revision;
+
+      localStorage.setItem("nb_last_site_spec", JSON.stringify(cloned));
+      window.open("/internal/preview", "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setErr(e?.message || "No se pudo duplicar el site.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
+  async function handleExport(id) {
+    const key = `export:${id}`;
+    setBusyKey(key);
+    setErr("");
+
+    try {
+      const spec = await fetchSiteSpec(id);
+      const blob = new Blob([JSON.stringify(spec, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setErr(e?.message || "No se pudo exportar el JSON.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
+  async function handleDelete(id) {
+    const ok = window.confirm(
+      `Vas a despublicar y borrar el site "${id}". Esta acción elimina la URL pública.`
+    );
+    if (!ok) return;
+
+    const key = `delete:${id}`;
+    setBusyKey(key);
+    setErr("");
+
+    try {
+      const r = await fetch(`/api/sites/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
 
-      setPublishUrl(data?.url || "");
-      if (data?.url) {
-        window.open(data.url, "_blank", "noopener,noreferrer");
-      }
+      setItems((prev) => prev.filter((x) => x?.id !== id));
     } catch (e) {
-      setPublishErr(e?.message || "Publish failed");
+      setErr(e?.message || "No se pudo borrar el site.");
     } finally {
-      setPublishing(false);
+      setBusyKey("");
     }
   }
-
-  function exportCurrentSpec() {
-    if (!spec) return;
-
-    const id = spec?.meta?.site_id || "site";
-    const blob = new Blob([JSON.stringify(spec, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${id}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  function duplicateCurrentSpec() {
-    if (!spec) return;
-
-    const cloned = JSON.parse(JSON.stringify(spec));
-    cloned.meta = cloned.meta || {};
-    cloned.meta.site_id = buildDuplicateId(cloned?.meta?.site_id || "site");
-
-    const normalized = normalizeIncomingSpec(cloned);
-    saveSpecToLocalStorage(normalized);
-    setSpec(normalized);
-    setDraft(getDraftFromSpec(normalized));
-    setPublishErr("");
-    setPublishUrl("");
-    setEditorMsg("Copia creada con un site_id nuevo.");
-  }
-
-  function openImportDialog() {
-    fileInputRef.current?.click();
-  }
-
-  async function handleImportFile(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setPublishErr("");
-    setPublishUrl("");
-    setEditorMsg("");
-
-    try {
-      const txt = await file.text();
-      const rawSpec = JSON.parse(txt);
-      const normalized = normalizeIncomingSpec(rawSpec);
-
-      saveSpecToLocalStorage(normalized);
-      setSpec(normalized);
-      setDraft(getDraftFromSpec(normalized));
-      setEditorMsg("JSON importado correctamente.");
-    } catch (err) {
-      setPublishErr("No se pudo importar el JSON.");
-    } finally {
-      e.target.value = "";
-    }
-  }
-
-  function applyEdits() {
-    if (!spec) return;
-
-    try {
-      const nextSpec = applyDraftToSpec(spec, draft);
-      const normalized = normalizeIncomingSpec(nextSpec);
-
-      saveSpecToLocalStorage(normalized);
-      setSpec(normalized);
-      setDraft(getDraftFromSpec(normalized));
-      setPublishErr("");
-      setPublishUrl("");
-      setEditorMsg("Cambios aplicados en preview. Ya puedes publicar.");
-    } catch {
-      setPublishErr("No se pudieron aplicar los cambios.");
-    }
-  }
-
-  function resetDraft() {
-    if (!spec) return;
-    setDraft(getDraftFromSpec(spec));
-    setEditorMsg("Formulario reseteado desde el spec actual.");
-  }
-
-  if (!spec) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center px-6">
-        <div className="bg-white border rounded-2xl p-6 max-w-md text-center shadow-sm">
-          <h1 className="text-lg font-semibold mb-2">No hay site_spec cargado</h1>
-          <p className="text-sm text-gray-600">
-            Genera un <code>site_spec</code> desde el panel interno o el portal cliente y vuelve aquí.
-          </p>
-          <a
-            href="/internal/new-client"
-            className="inline-flex items-center justify-center mt-4 px-4 py-2.5 bg-blue-900 text-white text-sm font-semibold rounded-md hover:bg-blue-800"
-          >
-            Ir al panel interno
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  const title = spec?.seo?.title || spec?.meta?.title || "Preview";
-  const favicon = spec?.brand?.logoDataUrl ? spec.brand.logoDataUrl : "/logo.png";
-
-  const inputBase =
-    "w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none " +
-    "focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400 placeholder:text-neutral-400";
-
-  const labelBase = "block text-xs font-semibold text-neutral-700 mb-1";
 
   return (
-    <>
+    <div className="min-h-screen bg-neutral-50">
       <Head>
-        <title>{title} · Preview</title>
-        <link rel="icon" type="image/png" href={favicon} />
+        <title>Sites · Internal</title>
       </Head>
 
-      <div style={cssVars} className="nb-root min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]">
-        <div className="sticky top-0 z-40 border-b border-neutral-200/60 bg-white/70 backdrop-blur">
-          <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <div className="text-xs text-neutral-500">Preview</div>
-              <div className="text-sm font-semibold text-neutral-900 truncate">
-                {spec?.business?.name || spec?.meta?.title || spec?.meta?.site_id || "Site"}
-              </div>
-              <div className="text-[11px] text-neutral-500 mt-1 font-mono">
-                {spec?.meta?.site_id || "-"}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setEditorOpen((v) => !v)}
-                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
-                title="Abrir editor ligero"
-              >
-                {editorOpen ? "Close editor" : "Edit"}
-              </button>
-
-              <button
-                onClick={openImportDialog}
-                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
-                title="Importar site_spec desde JSON"
-              >
-                Import JSON
-              </button>
-
-              <button
-                onClick={exportCurrentSpec}
-                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
-                title="Exportar site_spec actual"
-              >
-                Export JSON
-              </button>
-
-              <button
-                onClick={duplicateCurrentSpec}
-                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
-                title="Duplicar este site con un site_id nuevo"
-              >
-                Duplicate as new
-              </button>
-
-              {publishUrl ? (
-                <a
-                  href={publishUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
-                  title="Abrir web pública"
-                >
-                  Open public
-                </a>
-              ) : null}
-
-              <button
-                onClick={publishCurrentSpec}
-                disabled={publishing}
-                className="text-xs font-semibold rounded-lg bg-neutral-900 text-white px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
-                title="Publicar o actualizar este site_spec como /s/<site_id>"
-              >
-                {publishing ? "Publishing…" : "Publish"}
-              </button>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/json,.json"
-                onChange={handleImportFile}
-                className="hidden"
-              />
+      <div className="sticky top-0 z-10 border-b border-neutral-200 bg-white/80 backdrop-blur">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-neutral-900">Published Sites</div>
+            <div className="text-xs text-neutral-600 mt-1">
+              Gestión interna de sites publicados con versión y trazabilidad básica
             </div>
           </div>
 
-          {(publishErr || publishUrl || editorMsg) ? (
-            <div className="max-w-6xl mx-auto px-6 pb-3 space-y-2">
-              {publishErr ? (
-                <div className="text-xs rounded-xl border border-red-200 bg-red-50 text-red-800 px-3 py-2">
-                  {publishErr}
-                </div>
-              ) : null}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={load}
+              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-neutral-50"
+            >
+              Refresh
+            </button>
+            <a
+              href="/internal/lab"
+              className="rounded-xl bg-neutral-900 text-white px-3 py-2 text-sm font-semibold hover:bg-neutral-800"
+            >
+              Open Lab
+            </a>
+          </div>
+        </div>
+      </div>
 
-              {editorMsg ? (
-                <div className="text-xs rounded-xl border border-blue-200 bg-blue-50 text-blue-800 px-3 py-2">
-                  {editorMsg}
-                </div>
-              ) : null}
-
-              {publishUrl ? (
-                <div className="text-xs rounded-xl border border-green-200 bg-green-50 text-green-800 px-3 py-2">
-                  Publicado: <code className="font-semibold">{publishUrl}</code>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por id, nombre, sector, goal, personality, fork..."
+            className="w-full md:w-[520px] rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-neutral-900/10"
+          />
+          <div className="text-xs text-neutral-600">
+            Total: <b className="text-neutral-900">{items.length}</b> · Mostrando:{" "}
+            <b className="text-neutral-900">{filtered.length}</b>
+          </div>
         </div>
 
-        {editorOpen ? (
-          <div className="max-w-6xl mx-auto px-6 pt-5">
-            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
-              <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-neutral-900">Editor ligero</div>
-                  <div className="text-xs text-neutral-600 mt-1">
-                    Cambia datos visibles y republica. No modifica estructura profunda ni módulos avanzados.
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={resetDraft}
-                    className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50"
-                  >
-                    Reset
-                  </button>
-                  <button
-                    onClick={applyEdits}
-                    className="rounded-xl bg-neutral-900 text-white px-3 py-2 text-xs font-semibold hover:bg-neutral-800"
-                  >
-                    Apply edits
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className={labelBase}>site_id</label>
-                    <input
-                      className={inputBase}
-                      value={draft.siteId}
-                      onChange={(e) => setDraft((d) => ({ ...d, siteId: e.target.value }))}
-                      placeholder="site-id"
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelBase}>Nombre del negocio</label>
-                    <input
-                      className={inputBase}
-                      value={draft.businessName}
-                      onChange={(e) => setDraft((d) => ({ ...d, businessName: e.target.value }))}
-                      placeholder="Nombre comercial"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelBase}>Sector</label>
-                      <input
-                        className={inputBase}
-                        value={draft.sector}
-                        onChange={(e) => setDraft((d) => ({ ...d, sector: e.target.value }))}
-                        placeholder="Sector / actividad"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelBase}>Ubicación</label>
-                      <input
-                        className={inputBase}
-                        value={draft.location}
-                        onChange={(e) => setDraft((d) => ({ ...d, location: e.target.value }))}
-                        placeholder="Ciudad / zona"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={labelBase}>Público objetivo</label>
-                    <input
-                      className={inputBase}
-                      value={draft.targetAudience}
-                      onChange={(e) => setDraft((d) => ({ ...d, targetAudience: e.target.value }))}
-                      placeholder="B2B, familias, premium..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelBase}>Personality</label>
-                    <select
-                      className={inputBase}
-                      value={draft.personality}
-                      onChange={(e) => setDraft((d) => ({ ...d, personality: e.target.value }))}
-                    >
-                      {PERSONALITIES.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className={labelBase}>SEO title</label>
-                    <input
-                      className={inputBase}
-                      value={draft.seoTitle}
-                      onChange={(e) => setDraft((d) => ({ ...d, seoTitle: e.target.value }))}
-                      placeholder="Título SEO"
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelBase}>SEO description</label>
-                    <textarea
-                      className={inputBase + " min-h-[88px] resize-y"}
-                      value={draft.seoDescription}
-                      onChange={(e) => setDraft((d) => ({ ...d, seoDescription: e.target.value }))}
-                      placeholder="Descripción SEO"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className={labelBase}>Hero headline</label>
-                    <input
-                      className={inputBase}
-                      value={draft.heroHeadline}
-                      onChange={(e) => setDraft((d) => ({ ...d, heroHeadline: e.target.value }))}
-                      placeholder="Headline principal"
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelBase}>Hero subheadline</label>
-                    <textarea
-                      className={inputBase + " min-h-[88px] resize-y"}
-                      value={draft.heroSubheadline}
-                      onChange={(e) => setDraft((d) => ({ ...d, heroSubheadline: e.target.value }))}
-                      placeholder="Subheadline / propuesta de valor"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelBase}>CTA principal</label>
-                      <input
-                        className={inputBase}
-                        value={draft.heroPrimaryCta}
-                        onChange={(e) => setDraft((d) => ({ ...d, heroPrimaryCta: e.target.value }))}
-                        placeholder="Acción principal"
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelBase}>CTA secundaria</label>
-                      <input
-                        className={inputBase}
-                        value={draft.heroSecondaryCta}
-                        onChange={(e) => setDraft((d) => ({ ...d, heroSecondaryCta: e.target.value }))}
-                        placeholder="Acción secundaria"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={labelBase}>Título contacto</label>
-                    <input
-                      className={inputBase}
-                      value={draft.contactTitle}
-                      onChange={(e) => setDraft((d) => ({ ...d, contactTitle: e.target.value }))}
-                      placeholder="Título del bloque contacto"
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelBase}>Nota contacto</label>
-                    <textarea
-                      className={inputBase + " min-h-[110px] resize-y"}
-                      value={draft.contactNote}
-                      onChange={(e) => setDraft((d) => ({ ...d, contactNote: e.target.value }))}
-                      placeholder="Texto breve de contacto"
-                    />
-                  </div>
-
-                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-xs text-neutral-600">
-                    Cambios recomendados en este modo:
-                    <div className="mt-2">
-                      site_id, nombre, personality, hero, SEO y contacto.
-                    </div>
-                    <div className="mt-1">
-                      Para cambios estructurales profundos, sigue usando Lab / generador.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {err ? (
+          <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {err}
           </div>
         ) : null}
 
-        <PacksRouter spec={spec} />
+        <div className="mt-6 rounded-2xl border border-neutral-200 bg-white overflow-hidden">
+          <div className="overflow-auto">
+            <table className="min-w-[1480px] w-full text-sm">
+              <thead className="bg-neutral-50 text-neutral-600">
+                <tr>
+                  <th className="text-left font-semibold px-4 py-3">Site</th>
+                  <th className="text-left font-semibold px-4 py-3">Goal</th>
+                  <th className="text-left font-semibold px-4 py-3">Pack / Archetype</th>
+                  <th className="text-left font-semibold px-4 py-3">Personality</th>
+                  <th className="text-left font-semibold px-4 py-3">Version</th>
+                  <th className="text-left font-semibold px-4 py-3">Updated</th>
+                  <th className="text-left font-semibold px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td className="px-4 py-4 text-neutral-600" colSpan={7}>
+                      Cargando…
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-6 text-neutral-600" colSpan={7}>
+                      No hay sites publicados (o no coinciden con la búsqueda).
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((it) => {
+                    const url = `/s/${it.id}`;
+                    return (
+                      <tr key={it.id} className="border-t border-neutral-100">
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-neutral-900">{it.name || it.id}</div>
+                          <div className="text-xs text-neutral-600 mt-1">
+                            <span className="font-mono">{it.id}</span>
+                            {it.location ? <> · {it.location}</> : null}
+                            {it.sector ? <> · {it.sector}</> : null}
+                          </div>
+                          {it.forked_from ? (
+                            <div className="mt-2 text-[11px] text-amber-700 font-mono">
+                              forked_from: {it.forked_from}
+                            </div>
+                          ) : null}
+                        </td>
 
-        {debug ? (
-          <div className="fixed bottom-4 right-4 z-50 w-[520px] max-h-[70vh] overflow-auto rounded-xl border bg-[var(--surface)]/95 p-3 shadow-lg">
-            <div className="text-xs font-semibold mb-2">DEBUG · site_spec (v2)</div>
-            <pre className="text-[10px] leading-4 whitespace-pre-wrap break-words">
-              {JSON.stringify(spec, null, 2)}
-            </pre>
+                        <td className="px-4 py-3 font-mono text-xs text-neutral-800">
+                          {it.goal || "-"}
+                        </td>
+
+                        <td className="px-4 py-3 text-xs text-neutral-800">
+                          <div className="font-mono">{it.pack || "-"}</div>
+                          <div className="font-mono text-neutral-600 mt-1">{it.archetype || "-"}</div>
+                        </td>
+
+                        <td className="px-4 py-3 font-mono text-xs text-neutral-800">
+                          {it.personality || "-"}
+                        </td>
+
+                        <td className="px-4 py-3 text-xs text-neutral-700">
+                          <div className="font-mono">rev {it.revision || 1}</div>
+                          {it.created_at ? (
+                            <div className="text-neutral-500 mt-1">
+                              created {new Date(it.created_at).toLocaleString()}
+                            </div>
+                          ) : null}
+                        </td>
+
+                        <td className="px-4 py-3 text-xs text-neutral-700">
+                          {it.updated_at || it.published_at
+                            ? new Date(it.updated_at || it.published_at).toLocaleString()
+                            : "-"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-xl bg-neutral-900 text-white px-3 py-2 text-xs font-semibold hover:bg-neutral-800"
+                            >
+                              Open
+                            </a>
+
+                            <button
+                              onClick={() => handleLoadToPreview(it.id)}
+                              disabled={busyKey === `load:${it.id}`}
+                              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
+                            >
+                              {busyKey === `load:${it.id}` ? "Loading…" : "Load to Preview"}
+                            </button>
+
+                            <button
+                              onClick={() => handleDuplicate(it.id)}
+                              disabled={busyKey === `dup:${it.id}`}
+                              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
+                            >
+                              {busyKey === `dup:${it.id}` ? "Duplicating…" : "Duplicate"}
+                            </button>
+
+                            <button
+                              onClick={() => handleExport(it.id)}
+                              disabled={busyKey === `export:${it.id}`}
+                              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
+                            >
+                              {busyKey === `export:${it.id}` ? "Exporting…" : "Export JSON"}
+                            </button>
+
+                            <button
+                              onClick={() => navigator.clipboard?.writeText(location.origin + url)}
+                              className={cx(
+                                "rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold",
+                                "hover:bg-neutral-50"
+                              )}
+                            >
+                              Copy URL
+                            </button>
+
+                            <button
+                              onClick={() => handleDelete(it.id)}
+                              disabled={busyKey === `delete:${it.id}`}
+                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
+                            >
+                              {busyKey === `delete:${it.id}` ? "Deleting…" : "Delete"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
-        ) : null}
+        </div>
+
+        <div className="mt-4 text-xs text-neutral-500">
+          Tip: al republicar un mismo <code>site_id</code> sube la revisión; al duplicar, se crea un fork con trazabilidad.
+        </div>
       </div>
-    </>
+    </div>
   );
 }
