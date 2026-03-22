@@ -5,6 +5,32 @@ function cx(...c) {
   return c.filter(Boolean).join(" ");
 }
 
+function sanitizeId(id) {
+  return (id ?? "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function buildDuplicateId(baseId) {
+  const clean = sanitizeId(baseId || "site") || "site";
+  const d = new Date();
+  const stamp = [
+    String(d.getFullYear()).slice(-2),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+    String(d.getHours()).padStart(2, "0"),
+    String(d.getMinutes()).padStart(2, "0"),
+    String(d.getSeconds()).padStart(2, "0"),
+  ].join("");
+
+  return `${clean}-copy-${stamp}`.slice(0, 80);
+}
+
 async function fetchSiteSpec(id) {
   const r = await fetch(`/api/sites/${encodeURIComponent(id)}`);
   const txt = await r.text();
@@ -82,6 +108,28 @@ export default function InternalSites() {
     }
   }
 
+  async function handleDuplicate(id) {
+    const key = `dup:${id}`;
+    setBusyKey(key);
+    setErr("");
+
+    try {
+      const spec = await fetchSiteSpec(id);
+      const cloned = JSON.parse(JSON.stringify(spec));
+
+      const newId = buildDuplicateId(cloned?.meta?.site_id || id);
+      cloned.meta = cloned.meta || {};
+      cloned.meta.site_id = newId;
+
+      localStorage.setItem("nb_last_site_spec", JSON.stringify(cloned));
+      window.open("/internal/preview", "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setErr(e?.message || "No se pudo duplicar el site.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
   async function handleExport(id) {
     const key = `export:${id}`;
     setBusyKey(key);
@@ -143,7 +191,7 @@ export default function InternalSites() {
           <div>
             <div className="text-sm font-semibold text-neutral-900">Published Sites</div>
             <div className="text-xs text-neutral-600 mt-1">
-              Gestión interna de sites publicados (abrir, editar, exportar, borrar)
+              Gestión interna de sites publicados (abrir, editar, duplicar, exportar, borrar)
             </div>
           </div>
 
@@ -186,7 +234,7 @@ export default function InternalSites() {
 
         <div className="mt-6 rounded-2xl border border-neutral-200 bg-white overflow-hidden">
           <div className="overflow-auto">
-            <table className="min-w-[1250px] w-full text-sm">
+            <table className="min-w-[1320px] w-full text-sm">
               <thead className="bg-neutral-50 text-neutral-600">
                 <tr>
                   <th className="text-left font-semibold px-4 py-3">Site</th>
@@ -256,6 +304,14 @@ export default function InternalSites() {
                             </button>
 
                             <button
+                              onClick={() => handleDuplicate(it.id)}
+                              disabled={busyKey === `dup:${it.id}`}
+                              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
+                            >
+                              {busyKey === `dup:${it.id}` ? "Duplicating…" : "Duplicate"}
+                            </button>
+
+                            <button
                               onClick={() => handleExport(it.id)}
                               disabled={busyKey === `export:${it.id}`}
                               className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
@@ -292,7 +348,7 @@ export default function InternalSites() {
         </div>
 
         <div className="mt-4 text-xs text-neutral-500">
-          Tip: “Load to Preview” te permite editar/republicar el site sin tocar código.
+          Tip: “Duplicate” crea una copia con un <code>site_id</code> nuevo y la carga en preview para que la edites y publiques.
         </div>
       </div>
     </div>
