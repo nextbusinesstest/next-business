@@ -7,6 +7,32 @@ import { v1ToV2 } from "../../lib/spec/adapters/v1_to_v2";
 import { normalizeV2 } from "../../lib/spec/v2/normalize";
 import { resolveV2Layout } from "../../lib/spec/v2/resolveLayout";
 
+function sanitizeId(id) {
+  return (id ?? "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function buildDuplicateId(baseId) {
+  const clean = sanitizeId(baseId || "site") || "site";
+  const d = new Date();
+  const stamp = [
+    String(d.getFullYear()).slice(-2),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+    String(d.getHours()).padStart(2, "0"),
+    String(d.getMinutes()).padStart(2, "0"),
+    String(d.getSeconds()).padStart(2, "0"),
+  ].join("");
+
+  return `${clean}-copy-${stamp}`.slice(0, 80);
+}
+
 export default function PreviewPage() {
   const [spec, setSpec] = useState(null);
   const [debug, setDebug] = useState(false);
@@ -25,6 +51,10 @@ export default function PreviewPage() {
     parsed = normalizeV2(parsed);
     parsed = resolveV2Layout(parsed);
     return parsed;
+  }
+
+  function saveSpecToLocalStorage(nextSpec) {
+    localStorage.setItem("nb_last_site_spec", JSON.stringify(nextSpec));
   }
 
   function loadFromLocalStorage() {
@@ -124,6 +154,20 @@ export default function PreviewPage() {
     URL.revokeObjectURL(url);
   }
 
+  function duplicateCurrentSpec() {
+    if (!spec) return;
+
+    const cloned = JSON.parse(JSON.stringify(spec));
+    cloned.meta = cloned.meta || {};
+    cloned.meta.site_id = buildDuplicateId(cloned?.meta?.site_id || "site");
+
+    const normalized = normalizeIncomingSpec(cloned);
+    saveSpecToLocalStorage(normalized);
+    setSpec(normalized);
+    setPublishErr("");
+    setPublishUrl("");
+  }
+
   function openImportDialog() {
     fileInputRef.current?.click();
   }
@@ -140,7 +184,7 @@ export default function PreviewPage() {
       const rawSpec = JSON.parse(txt);
       const normalized = normalizeIncomingSpec(rawSpec);
 
-      localStorage.setItem("nb_last_site_spec", JSON.stringify(normalized));
+      saveSpecToLocalStorage(normalized);
       setSpec(normalized);
     } catch (err) {
       setPublishErr("No se pudo importar el JSON.");
@@ -186,6 +230,9 @@ export default function PreviewPage() {
               <div className="text-sm font-semibold text-neutral-900 truncate">
                 {spec?.business?.name || spec?.meta?.title || spec?.meta?.site_id || "Site"}
               </div>
+              <div className="text-[11px] text-neutral-500 mt-1 font-mono">
+                {spec?.meta?.site_id || "-"}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -203,6 +250,14 @@ export default function PreviewPage() {
                 title="Exportar site_spec actual"
               >
                 Export JSON
+              </button>
+
+              <button
+                onClick={duplicateCurrentSpec}
+                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
+                title="Duplicar este site con un site_id nuevo"
+              >
+                Duplicate as new
               </button>
 
               {publishUrl ? (
