@@ -7,6 +7,19 @@ import { v1ToV2 } from "../../lib/spec/adapters/v1_to_v2";
 import { normalizeV2 } from "../../lib/spec/v2/normalize";
 import { resolveV2Layout } from "../../lib/spec/v2/resolveLayout";
 
+const PERSONALITIES = [
+  "modern_minimal",
+  "premium_elegant",
+  "trust_authority",
+  "clinical_calm",
+  "service_local_friendly",
+  "tech_clean",
+  "bold_street",
+  "artisan_warm",
+  "industrial_solid",
+  "dark_luxury",
+];
+
 function sanitizeId(id) {
   return (id ?? "")
     .toString()
@@ -33,6 +46,113 @@ function buildDuplicateId(baseId) {
   return `${clean}-copy-${stamp}`.slice(0, 80);
 }
 
+function safeTrim(v) {
+  return (v ?? "").toString().trim();
+}
+
+function chooseHeaderVariant(archetype, personality, currentHeader) {
+  if (
+    archetype === "booking_trust_v1" ||
+    personality === "trust_authority" ||
+    personality === "clinical_calm" ||
+    personality === "industrial_solid"
+  ) {
+    return "header_trust_v1";
+  }
+
+  if (currentHeader === "header_trust_v1") {
+    return "header_minimal_v1";
+  }
+
+  return currentHeader || "header_minimal_v1";
+}
+
+function getDraftFromSpec(spec) {
+  return {
+    siteId: spec?.meta?.site_id || "",
+    businessName: spec?.business?.name || "",
+    sector: spec?.business?.sector || "",
+    location: spec?.business?.location || "",
+    targetAudience: spec?.business?.target_audience || "",
+    personality: spec?.brand?.brand_personality || "modern_minimal",
+
+    seoTitle: spec?.seo?.title || "",
+    seoDescription: spec?.seo?.description || "",
+
+    heroHeadline: spec?.modules?.hero_auto?.headline || "",
+    heroSubheadline: spec?.modules?.hero_auto?.subheadline || "",
+    heroPrimaryCta: spec?.modules?.hero_auto?.cta_primary || "",
+    heroSecondaryCta: spec?.modules?.hero_auto?.cta_secondary || "",
+
+    contactTitle: spec?.modules?.contact_auto?.title || "",
+    contactNote: spec?.modules?.contact_auto?.note || "",
+  };
+}
+
+function applyDraftToSpec(baseSpec, draft) {
+  const next = JSON.parse(JSON.stringify(baseSpec || {}));
+
+  next.meta = next.meta || {};
+  next.business = next.business || {};
+  next.brand = next.brand || {};
+  next.layout = next.layout || {};
+  next.modules = next.modules || {};
+  next.modules.hero_auto = next.modules.hero_auto || {};
+  next.modules.contact_auto = next.modules.contact_auto || {};
+  next.seo = next.seo || {};
+  next.contact = next.contact || {};
+
+  const siteId = sanitizeId(draft.siteId) || next.meta.site_id || "site";
+  const businessName = safeTrim(draft.businessName) || next.business.name || "";
+  const sector = safeTrim(draft.sector);
+  const location = safeTrim(draft.location);
+  const targetAudience = safeTrim(draft.targetAudience);
+  const personality = safeTrim(draft.personality) || next.brand.brand_personality || "modern_minimal";
+
+  next.meta.site_id = siteId;
+
+  next.business.name = businessName;
+  next.business.sector = sector;
+  next.business.location = location;
+  next.business.target_audience = targetAudience;
+
+  next.brand.brand_personality = personality;
+
+  next.layout.header_variant = chooseHeaderVariant(
+    next.layout.archetype,
+    personality,
+    next.layout.header_variant
+  );
+
+  next.seo.title = safeTrim(draft.seoTitle) || businessName || next.seo.title || siteId;
+  next.seo.description =
+    safeTrim(draft.seoDescription) ||
+    next.seo.description ||
+    (sector ? `${businessName} · ${sector}` : businessName);
+
+  next.modules.hero_auto.headline =
+    safeTrim(draft.heroHeadline) || next.modules.hero_auto.headline || businessName;
+
+  next.modules.hero_auto.subheadline =
+    safeTrim(draft.heroSubheadline) || next.modules.hero_auto.subheadline || "";
+
+  next.modules.hero_auto.cta_primary =
+    safeTrim(draft.heroPrimaryCta) || next.modules.hero_auto.cta_primary || "";
+
+  next.modules.hero_auto.cta_secondary =
+    safeTrim(draft.heroSecondaryCta) || next.modules.hero_auto.cta_secondary || "";
+
+  next.modules.contact_auto.title =
+    safeTrim(draft.contactTitle) || next.modules.contact_auto.title || "Contacto";
+
+  next.modules.contact_auto.note =
+    safeTrim(draft.contactNote) || next.modules.contact_auto.note || "";
+
+  next.contact.address = location || next.contact.address || "";
+
+  return next;
+}
+
 export default function PreviewPage() {
   const [spec, setSpec] = useState(null);
   const [debug, setDebug] = useState(false);
@@ -40,6 +160,25 @@ export default function PreviewPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishUrl, setPublishUrl] = useState("");
   const [publishErr, setPublishErr] = useState("");
+
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorMsg, setEditorMsg] = useState("");
+  const [draft, setDraft] = useState({
+    siteId: "",
+    businessName: "",
+    sector: "",
+    location: "",
+    targetAudience: "",
+    personality: "modern_minimal",
+    seoTitle: "",
+    seoDescription: "",
+    heroHeadline: "",
+    heroSubheadline: "",
+    heroPrimaryCta: "",
+    heroSecondaryCta: "",
+    contactTitle: "",
+    contactNote: "",
+  });
 
   const fileInputRef = useRef(null);
 
@@ -65,6 +204,7 @@ export default function PreviewPage() {
       const parsed = JSON.parse(raw);
       const normalized = normalizeIncomingSpec(parsed);
       setSpec(normalized);
+      setDraft(getDraftFromSpec(normalized));
     } catch (e) {
       console.error("Error loading site_spec:", e);
       setSpec(null);
@@ -115,6 +255,7 @@ export default function PreviewPage() {
     setPublishing(true);
     setPublishErr("");
     setPublishUrl("");
+    setEditorMsg("");
 
     try {
       const r = await fetch("/api/sites", {
@@ -164,8 +305,10 @@ export default function PreviewPage() {
     const normalized = normalizeIncomingSpec(cloned);
     saveSpecToLocalStorage(normalized);
     setSpec(normalized);
+    setDraft(getDraftFromSpec(normalized));
     setPublishErr("");
     setPublishUrl("");
+    setEditorMsg("Copia creada con un site_id nuevo.");
   }
 
   function openImportDialog() {
@@ -178,6 +321,7 @@ export default function PreviewPage() {
 
     setPublishErr("");
     setPublishUrl("");
+    setEditorMsg("");
 
     try {
       const txt = await file.text();
@@ -186,11 +330,37 @@ export default function PreviewPage() {
 
       saveSpecToLocalStorage(normalized);
       setSpec(normalized);
+      setDraft(getDraftFromSpec(normalized));
+      setEditorMsg("JSON importado correctamente.");
     } catch (err) {
       setPublishErr("No se pudo importar el JSON.");
     } finally {
       e.target.value = "";
     }
+  }
+
+  function applyEdits() {
+    if (!spec) return;
+
+    try {
+      const nextSpec = applyDraftToSpec(spec, draft);
+      const normalized = normalizeIncomingSpec(nextSpec);
+
+      saveSpecToLocalStorage(normalized);
+      setSpec(normalized);
+      setDraft(getDraftFromSpec(normalized));
+      setPublishErr("");
+      setPublishUrl("");
+      setEditorMsg("Cambios aplicados en preview. Ya puedes publicar.");
+    } catch {
+      setPublishErr("No se pudieron aplicar los cambios.");
+    }
+  }
+
+  function resetDraft() {
+    if (!spec) return;
+    setDraft(getDraftFromSpec(spec));
+    setEditorMsg("Formulario reseteado desde el spec actual.");
   }
 
   if (!spec) {
@@ -215,6 +385,12 @@ export default function PreviewPage() {
   const title = spec?.seo?.title || spec?.meta?.title || "Preview";
   const favicon = spec?.brand?.logoDataUrl ? spec.brand.logoDataUrl : "/logo.png";
 
+  const inputBase =
+    "w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none " +
+    "focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-400 placeholder:text-neutral-400";
+
+  const labelBase = "block text-xs font-semibold text-neutral-700 mb-1";
+
   return (
     <>
       <Head>
@@ -236,6 +412,14 @@ export default function PreviewPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setEditorOpen((v) => !v)}
+                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
+                title="Abrir editor ligero"
+              >
+                {editorOpen ? "Close editor" : "Edit"}
+              </button>
+
               <button
                 onClick={openImportDialog}
                 className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
@@ -291,22 +475,222 @@ export default function PreviewPage() {
             </div>
           </div>
 
-          {(publishErr || publishUrl) ? (
-            <div className="max-w-6xl mx-auto px-6 pb-3">
+          {(publishErr || publishUrl || editorMsg) ? (
+            <div className="max-w-6xl mx-auto px-6 pb-3 space-y-2">
               {publishErr ? (
                 <div className="text-xs rounded-xl border border-red-200 bg-red-50 text-red-800 px-3 py-2">
                   {publishErr}
                 </div>
               ) : null}
 
+              {editorMsg ? (
+                <div className="text-xs rounded-xl border border-blue-200 bg-blue-50 text-blue-800 px-3 py-2">
+                  {editorMsg}
+                </div>
+              ) : null}
+
               {publishUrl ? (
-                <div className="text-xs rounded-xl border border-green-200 bg-green-50 text-green-800 px-3 py-2 mt-2">
+                <div className="text-xs rounded-xl border border-green-200 bg-green-50 text-green-800 px-3 py-2">
                   Publicado: <code className="font-semibold">{publishUrl}</code>
                 </div>
               ) : null}
             </div>
           ) : null}
         </div>
+
+        {editorOpen ? (
+          <div className="max-w-6xl mx-auto px-6 pt-5">
+            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
+              <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-neutral-900">Editor ligero</div>
+                  <div className="text-xs text-neutral-600 mt-1">
+                    Cambia datos visibles y republica. No modifica estructura profunda ni módulos avanzados.
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={resetDraft}
+                    className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={applyEdits}
+                    className="rounded-xl bg-neutral-900 text-white px-3 py-2 text-xs font-semibold hover:bg-neutral-800"
+                  >
+                    Apply edits
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className={labelBase}>site_id</label>
+                    <input
+                      className={inputBase}
+                      value={draft.siteId}
+                      onChange={(e) => setDraft((d) => ({ ...d, siteId: e.target.value }))}
+                      placeholder="site-id"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelBase}>Nombre del negocio</label>
+                    <input
+                      className={inputBase}
+                      value={draft.businessName}
+                      onChange={(e) => setDraft((d) => ({ ...d, businessName: e.target.value }))}
+                      placeholder="Nombre comercial"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className={labelBase}>Sector</label>
+                      <input
+                        className={inputBase}
+                        value={draft.sector}
+                        onChange={(e) => setDraft((d) => ({ ...d, sector: e.target.value }))}
+                        placeholder="Sector / actividad"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelBase}>Ubicación</label>
+                      <input
+                        className={inputBase}
+                        value={draft.location}
+                        onChange={(e) => setDraft((d) => ({ ...d, location: e.target.value }))}
+                        placeholder="Ciudad / zona"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={labelBase}>Público objetivo</label>
+                    <input
+                      className={inputBase}
+                      value={draft.targetAudience}
+                      onChange={(e) => setDraft((d) => ({ ...d, targetAudience: e.target.value }))}
+                      placeholder="B2B, familias, premium..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelBase}>Personality</label>
+                    <select
+                      className={inputBase}
+                      value={draft.personality}
+                      onChange={(e) => setDraft((d) => ({ ...d, personality: e.target.value }))}
+                    >
+                      {PERSONALITIES.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={labelBase}>SEO title</label>
+                    <input
+                      className={inputBase}
+                      value={draft.seoTitle}
+                      onChange={(e) => setDraft((d) => ({ ...d, seoTitle: e.target.value }))}
+                      placeholder="Título SEO"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelBase}>SEO description</label>
+                    <textarea
+                      className={inputBase + " min-h-[88px] resize-y"}
+                      value={draft.seoDescription}
+                      onChange={(e) => setDraft((d) => ({ ...d, seoDescription: e.target.value }))}
+                      placeholder="Descripción SEO"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className={labelBase}>Hero headline</label>
+                    <input
+                      className={inputBase}
+                      value={draft.heroHeadline}
+                      onChange={(e) => setDraft((d) => ({ ...d, heroHeadline: e.target.value }))}
+                      placeholder="Headline principal"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelBase}>Hero subheadline</label>
+                    <textarea
+                      className={inputBase + " min-h-[88px] resize-y"}
+                      value={draft.heroSubheadline}
+                      onChange={(e) => setDraft((d) => ({ ...d, heroSubheadline: e.target.value }))}
+                      placeholder="Subheadline / propuesta de valor"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className={labelBase}>CTA principal</label>
+                      <input
+                        className={inputBase}
+                        value={draft.heroPrimaryCta}
+                        onChange={(e) => setDraft((d) => ({ ...d, heroPrimaryCta: e.target.value }))}
+                        placeholder="Acción principal"
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelBase}>CTA secundaria</label>
+                      <input
+                        className={inputBase}
+                        value={draft.heroSecondaryCta}
+                        onChange={(e) => setDraft((d) => ({ ...d, heroSecondaryCta: e.target.value }))}
+                        placeholder="Acción secundaria"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={labelBase}>Título contacto</label>
+                    <input
+                      className={inputBase}
+                      value={draft.contactTitle}
+                      onChange={(e) => setDraft((d) => ({ ...d, contactTitle: e.target.value }))}
+                      placeholder="Título del bloque contacto"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelBase}>Nota contacto</label>
+                    <textarea
+                      className={inputBase + " min-h-[110px] resize-y"}
+                      value={draft.contactNote}
+                      onChange={(e) => setDraft((d) => ({ ...d, contactNote: e.target.value }))}
+                      placeholder="Texto breve de contacto"
+                    />
+                  </div>
+
+                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-xs text-neutral-600">
+                    Cambios recomendados en este modo:
+                    <div className="mt-2">
+                      site_id, nombre, personality, hero, SEO y contacto.
+                    </div>
+                    <div className="mt-1">
+                      Para cambios estructurales profundos, sigue usando Lab / generador.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <PacksRouter spec={spec} />
 
