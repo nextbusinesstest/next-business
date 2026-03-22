@@ -43,6 +43,7 @@ async function kvGet(key) {
   const { url, token } = getKvConfig();
   const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
   });
   if (!r.ok) throw new Error(`KV get failed (${r.status})`);
   const data = await r.json().catch(() => null);
@@ -78,13 +79,14 @@ async function kvSMembers(key) {
   return Array.isArray(data?.result) ? data.result : [];
 }
 
-// ---------------- Meta extraction ----------------
-function extractMetaFromSpec(spec) {
+// ---------------- Meta extraction / versioning ----------------
+function extractBaseMetaFromSpec(spec) {
   const id = sanitizeId(spec?.meta?.site_id);
   const business = spec?.business || {};
   const strategy = spec?.strategy || {};
   const layout = spec?.layout || {};
   const brand = spec?.brand || {};
+  const meta = spec?.meta || {};
 
   return {
     id,
@@ -95,7 +97,24 @@ function extractMetaFromSpec(spec) {
     pack: clampStr(layout?.pack, 60),
     archetype: clampStr(layout?.archetype, 60),
     personality: clampStr(brand?.brand_personality, 60),
-    published_at: new Date().toISOString(),
+    forked_from: clampStr(meta?.forked_from, 80),
+  };
+}
+
+function mergeVersioning(existingMeta, nextBaseMeta) {
+  const now = new Date().toISOString();
+
+  const createdAt = existingMeta?.created_at || now;
+  const updatedAt = now;
+  const prevRevision = Number(existingMeta?.revision || 0);
+  const revision = prevRevision > 0 ? prevRevision + 1 : 1;
+
+  return {
+    ...nextBaseMeta,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    published_at: updatedAt, // compat con tu dashboard actual
+    revision,
   };
 }
 
@@ -127,24 +146,32 @@ export default async function handler(req, res) {
     try {
       if (IS_PROD) {
         const ids = await kvSMembers("nb:sites:index");
-        // cargar metas (limitamos a 200 para MVP)
         const metas = [];
-        for (const id of ids.slice(0, 200)) {
+
+        for (const id of ids.slice(0, 300)) {
           const raw = await kvGet(`nb:site_meta:${id}`);
           if (!raw) continue;
           try {
             metas.push(JSON.parse(raw));
           } catch {}
         }
-        // orden: más recientes primero
-        metas.sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || "")));
+
+        metas.sort((a, b) =>
+          String(b.updated_at || b.published_at || "").localeCompare(
+            String(a.updated_at || a.published_at || "")
+          )
+        );
+
         res.status(200).json({ items: metas });
         return;
       }
 
-      // DEV: leer index + metas del fs
-      const index = fsReadIndex(); // array de meta objects
-      index.sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || "")));
+      const index = fsReadIndex();
+      index.sort((a, b) =>
+        String(b.updated_at || b.published_at || "").localeCompare(
+          String(a.updated_at || a.published_at || "")
+        )
+      );
       res.status(200).json({ items: index });
       return;
     } catch (e) {
@@ -175,23 +202,44 @@ export default async function handler(req, res) {
       return;
     }
 
-    const meta = extractMetaFromSpec(spec);
-
     try {
+      let existingMeta = null;
+
       if (IS_PROD) {
-        // spec + meta
-        await kvSet(`nb:site:${id}`, raw);
+        const existingRaw = await kvGet(`nb:site_meta:${id}`);
+        if (existingRaw) {
+          try {
+            existingMeta = JSON.parse(existingRaw);
+          } catch {}
+        }
+      } else {
+        existingMeta = fsReadIndex().find((x) => x?.id === id) || null;
+      }
+
+      const baseMeta = extractBaseMetaFromSpec(spec);
+      const meta = mergeVersioning(existingMeta, baseMeta);
+
+      // reflejamos versionado también dentro del propio spec.meta
+      spec.meta.created_at = meta.created_at;
+      spec.meta.updated_at = meta.updated_at;
+      spec.meta.revision = meta.revision;
+      if (meta.forked_from) {
+        spec.meta.forked_from = meta.forked_from;
+      }
+
+      const finalRaw = JSON.stringify(spec);
+
+      if (IS_PROD) {
+        await kvSet(`nb:site:${id}`, finalRaw);
         await kvSet(`nb:site_meta:${id}`, JSON.stringify(meta));
         await kvSAdd("nb:sites:index", id);
       } else {
-        // DEV filesystem
         const dir = getFsDir();
         ensureDir(dir);
-        fs.writeFileSync(path.join(dir, `${id}.json`), raw, "utf8");
+        fs.writeFileSync(path.join(dir, `${id}.json`), finalRaw, "utf8");
 
-        // index = array de metas (únicas por id)
         const index = fsReadIndex().filter((x) => x?.id !== id);
-        index.unshift(meta); // newest first
+        index.unshift(meta);
         fsWriteIndex(index);
       }
 
