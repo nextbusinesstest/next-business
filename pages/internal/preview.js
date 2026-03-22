@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import PacksRouter from "../../components/preview/PacksRouter";
 
@@ -11,13 +11,37 @@ export default function PreviewPage() {
   const [spec, setSpec] = useState(null);
   const [debug, setDebug] = useState(false);
 
-  // publish state
   const [publishing, setPublishing] = useState(false);
   const [publishUrl, setPublishUrl] = useState("");
   const [publishErr, setPublishErr] = useState("");
 
+  const fileInputRef = useRef(null);
+
+  function normalizeIncomingSpec(rawSpec) {
+    let parsed = rawSpec;
+    if (!parsed?.version || parsed.version === "v1") {
+      parsed = v1ToV2(parsed);
+    }
+    parsed = normalizeV2(parsed);
+    parsed = resolveV2Layout(parsed);
+    return parsed;
+  }
+
+  function loadFromLocalStorage() {
+    const raw = window.localStorage.getItem("nb_last_site_spec");
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw);
+      const normalized = normalizeIncomingSpec(parsed);
+      setSpec(normalized);
+    } catch (e) {
+      console.error("Error loading site_spec:", e);
+      setSpec(null);
+    }
+  }
+
   useEffect(() => {
-    // Toggle debug con ?debug=1
     try {
       const params = new URLSearchParams(window.location.search);
       setDebug(params.get("debug") === "1");
@@ -25,35 +49,13 @@ export default function PreviewPage() {
       setDebug(false);
     }
 
-    const raw = window.localStorage.getItem("nb_last_site_spec");
-    if (!raw) return;
-
-    try {
-      let parsed = JSON.parse(raw);
-
-      // Si viene en v1 (o sin version), lo pasamos a v2
-      if (!parsed?.version || parsed.version === "v1") {
-        parsed = v1ToV2(parsed);
-      }
-
-      // Normalizamos + resolvemos layout/variantes
-      let normalized = normalizeV2(parsed);
-      normalized = resolveV2Layout(normalized);
-
-      setSpec(normalized);
-    } catch (e) {
-      console.error("Error loading site_spec:", e);
-      setSpec(null);
-    }
+    loadFromLocalStorage();
   }, []);
 
   const cssVars = useMemo(() => {
     const c = spec?.brand?.design_tokens?.colors;
     if (!c) return {};
 
-    // IMPORTANT (Bloque 6):
-    // No queremos que design_tokens.colors machaque el theme por defecto.
-    // Solo aplicamos estos CSS vars si el spec lo marca como override explícito.
     const wantsOverride =
       c._override === true ||
       c.__override === true ||
@@ -94,16 +96,56 @@ export default function PreviewPage() {
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
 
-      // data: { id, url }
       setPublishUrl(data?.url || "");
       if (data?.url) {
-        // abre en nueva pestaña
         window.open(data.url, "_blank", "noopener,noreferrer");
       }
     } catch (e) {
       setPublishErr(e?.message || "Publish failed");
     } finally {
       setPublishing(false);
+    }
+  }
+
+  function exportCurrentSpec() {
+    if (!spec) return;
+
+    const id = spec?.meta?.site_id || "site";
+    const blob = new Blob([JSON.stringify(spec, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function openImportDialog() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleImportFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPublishErr("");
+    setPublishUrl("");
+
+    try {
+      const txt = await file.text();
+      const rawSpec = JSON.parse(txt);
+      const normalized = normalizeIncomingSpec(rawSpec);
+
+      localStorage.setItem("nb_last_site_spec", JSON.stringify(normalized));
+      setSpec(normalized);
+    } catch (err) {
+      setPublishErr("No se pudo importar el JSON.");
+    } finally {
+      e.target.value = "";
     }
   }
 
@@ -137,7 +179,6 @@ export default function PreviewPage() {
       </Head>
 
       <div style={cssVars} className="nb-root min-h-screen bg-[var(--c-bg)] text-[var(--c-text)]">
-        {/* Top bar (internal) */}
         <div className="sticky top-0 z-40 border-b border-neutral-200/60 bg-white/70 backdrop-blur">
           <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
@@ -147,7 +188,23 @@ export default function PreviewPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={openImportDialog}
+                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
+                title="Importar site_spec desde JSON"
+              >
+                Import JSON
+              </button>
+
+              <button
+                onClick={exportCurrentSpec}
+                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
+                title="Exportar site_spec actual"
+              >
+                Export JSON
+              </button>
+
               {publishUrl ? (
                 <a
                   href={publishUrl}
@@ -164,10 +221,18 @@ export default function PreviewPage() {
                 onClick={publishCurrentSpec}
                 disabled={publishing}
                 className="text-xs font-semibold rounded-lg bg-neutral-900 text-white px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
-                title="Publicar este site_spec como /s/<site_id>"
+                title="Publicar o actualizar este site_spec como /s/<site_id>"
               >
                 {publishing ? "Publishing…" : "Publish"}
               </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={handleImportFile}
+                className="hidden"
+              />
             </div>
           </div>
 
