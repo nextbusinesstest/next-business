@@ -5,11 +5,25 @@ function cx(...c) {
   return c.filter(Boolean).join(" ");
 }
 
+async function fetchSiteSpec(id) {
+  const r = await fetch(`/api/sites/${encodeURIComponent(id)}`);
+  const txt = await r.text();
+  let json = null;
+  try {
+    json = JSON.parse(txt);
+  } catch {}
+  if (!r.ok) {
+    throw new Error(json?.error || `HTTP ${r.status}`);
+  }
+  return json;
+}
+
 export default function InternalSites() {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [busyKey, setBusyKey] = useState("");
 
   async function load() {
     setLoading(true);
@@ -52,6 +66,72 @@ export default function InternalSites() {
     });
   }, [items, q]);
 
+  async function handleLoadToPreview(id) {
+    const key = `load:${id}`;
+    setBusyKey(key);
+    setErr("");
+
+    try {
+      const spec = await fetchSiteSpec(id);
+      localStorage.setItem("nb_last_site_spec", JSON.stringify(spec));
+      window.open("/internal/preview", "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setErr(e?.message || "No se pudo cargar el spec en preview.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
+  async function handleExport(id) {
+    const key = `export:${id}`;
+    setBusyKey(key);
+    setErr("");
+
+    try {
+      const spec = await fetchSiteSpec(id);
+      const blob = new Blob([JSON.stringify(spec, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setErr(e?.message || "No se pudo exportar el JSON.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
+  async function handleDelete(id) {
+    const ok = window.confirm(
+      `Vas a despublicar y borrar el site "${id}". Esta acción elimina la URL pública.`
+    );
+    if (!ok) return;
+
+    const key = `delete:${id}`;
+    setBusyKey(key);
+    setErr("");
+
+    try {
+      const r = await fetch(`/api/sites/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+
+      setItems((prev) => prev.filter((x) => x?.id !== id));
+    } catch (e) {
+      setErr(e?.message || "No se pudo borrar el site.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-neutral-50">
       <Head>
@@ -63,7 +143,7 @@ export default function InternalSites() {
           <div>
             <div className="text-sm font-semibold text-neutral-900">Published Sites</div>
             <div className="text-xs text-neutral-600 mt-1">
-              Lista interna de sites publicados (KV / dev FS)
+              Gestión interna de sites publicados (abrir, editar, exportar, borrar)
             </div>
           </div>
 
@@ -106,7 +186,7 @@ export default function InternalSites() {
 
         <div className="mt-6 rounded-2xl border border-neutral-200 bg-white overflow-hidden">
           <div className="overflow-auto">
-            <table className="min-w-[1050px] w-full text-sm">
+            <table className="min-w-[1250px] w-full text-sm">
               <thead className="bg-neutral-50 text-neutral-600">
                 <tr>
                   <th className="text-left font-semibold px-4 py-3">Site</th>
@@ -157,7 +237,7 @@ export default function InternalSites() {
                           {it.published_at ? new Date(it.published_at).toLocaleString() : "-"}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <a
                               href={url}
                               target="_blank"
@@ -166,6 +246,23 @@ export default function InternalSites() {
                             >
                               Open
                             </a>
+
+                            <button
+                              onClick={() => handleLoadToPreview(it.id)}
+                              disabled={busyKey === `load:${it.id}`}
+                              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
+                            >
+                              {busyKey === `load:${it.id}` ? "Loading…" : "Load to Preview"}
+                            </button>
+
+                            <button
+                              onClick={() => handleExport(it.id)}
+                              disabled={busyKey === `export:${it.id}`}
+                              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
+                            >
+                              {busyKey === `export:${it.id}` ? "Exporting…" : "Export JSON"}
+                            </button>
+
                             <button
                               onClick={() => navigator.clipboard?.writeText(location.origin + url)}
                               className={cx(
@@ -174,6 +271,14 @@ export default function InternalSites() {
                               )}
                             >
                               Copy URL
+                            </button>
+
+                            <button
+                              onClick={() => handleDelete(it.id)}
+                              disabled={busyKey === `delete:${it.id}`}
+                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
+                            >
+                              {busyKey === `delete:${it.id}` ? "Deleting…" : "Delete"}
                             </button>
                           </div>
                         </td>
@@ -187,7 +292,7 @@ export default function InternalSites() {
         </div>
 
         <div className="mt-4 text-xs text-neutral-500">
-          Tip: Publica desde <code>/internal/preview</code> y aparecerá aquí.
+          Tip: “Load to Preview” te permite editar/republicar el site sin tocar código.
         </div>
       </div>
     </div>
