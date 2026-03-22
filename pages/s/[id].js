@@ -1,8 +1,55 @@
+import fs from "fs";
+import path from "path";
 import Head from "next/head";
 import PacksRouter from "../../components/preview/PacksRouter";
 import { v1ToV2 } from "../../lib/spec/adapters/v1_to_v2";
 import { normalizeV2 } from "../../lib/spec/v2/normalize";
 import { resolveV2Layout } from "../../lib/spec/v2/resolveLayout";
+
+const IS_PROD = (process.env.NODE_ENV || "development") === "production";
+
+function sanitizeId(id) {
+  return (id ?? "").toString().trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+}
+
+function getFsDir() {
+  return path.join(process.cwd(), "data", "sites");
+}
+
+// ---------------- KV helpers ----------------
+function getKvConfig() {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) {
+    throw new Error("KV not configured (missing KV_REST_API_URL / KV_REST_API_TOKEN).");
+  }
+  return { url, token };
+}
+
+async function kvGet(key) {
+  const { url, token } = getKvConfig();
+  const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+
+  if (!r.ok) {
+    throw new Error(`KV get failed (${r.status})`);
+  }
+
+  const data = await r.json().catch(() => null);
+  return data?.result ?? null;
+}
+
+async function loadRawSpecById(id) {
+  if (IS_PROD) {
+    return await kvGet(`nb:site:${id}`);
+  }
+
+  const file = path.join(getFsDir(), `${id}.json`);
+  if (!fs.existsSync(file)) return null;
+  return fs.readFileSync(file, "utf8");
+}
 
 export default function PublicSite({ spec }) {
   if (!spec) {
@@ -18,8 +65,15 @@ export default function PublicSite({ spec }) {
     );
   }
 
-  const title = spec?.seo?.title || spec?.meta?.title || spec?.business?.name || "Site";
-  const favicon = spec?.brand?.logoDataUrl ? spec.brand.logoDataUrl : "/logo.png";
+  const title =
+    spec?.seo?.title ||
+    spec?.meta?.title ||
+    spec?.business?.name ||
+    "Site";
+
+  const favicon = spec?.brand?.logoDataUrl
+    ? spec.brand.logoDataUrl
+    : "/logo.png";
 
   return (
     <>
@@ -36,24 +90,32 @@ export default function PublicSite({ spec }) {
 }
 
 export async function getServerSideProps(ctx) {
-  const { id } = ctx.params;
+  const id = sanitizeId(ctx?.params?.id);
 
-  const base =
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    `http://${ctx.req.headers.host}`;
+  if (!id) {
+    return { props: { spec: null } };
+  }
 
   try {
-    const r = await fetch(`${base}/api/sites/${encodeURIComponent(id)}`);
-    if (!r.ok) return { props: { spec: null } };
+    const raw = await loadRawSpecById(id);
+    if (!raw) {
+      return { props: { spec: null } };
+    }
 
-    let spec = await r.json();
+    let spec = JSON.parse(raw);
 
-    if (!spec?.version || spec.version === "v1") spec = v1ToV2(spec);
+    if (!spec?.version || spec.version === "v1") {
+      spec = v1ToV2(spec);
+    }
+
     spec = normalizeV2(spec);
     spec = resolveV2Layout(spec);
 
-    return { props: { spec } };
-  } catch {
+    return {
+      props: { spec },
+    };
+  } catch (e) {
+    console.error("Error loading public site:", e);
     return { props: { spec: null } };
   }
 }
