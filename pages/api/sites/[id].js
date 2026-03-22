@@ -11,18 +11,21 @@ function getFsDir() {
   return path.join(process.cwd(), "data", "sites");
 }
 
-async function kvGet(key) {
+// KV helpers
+function getKvConfig() {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) throw new Error("KV not configured (missing KV_REST_API_URL / KV_REST_API_TOKEN).");
+  return { url, token };
+}
 
+async function kvGet(key) {
+  const { url, token } = getKvConfig();
   const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!r.ok) throw new Error(`KV get failed (${r.status})`);
-
   const data = await r.json().catch(() => null);
-  // Upstash devuelve { result: "..." } o { result: null }
   return data?.result ?? null;
 }
 
