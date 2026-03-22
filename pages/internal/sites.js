@@ -84,6 +84,8 @@ export default function InternalSites() {
         it?.pack,
         it?.archetype,
         it?.personality,
+        it?.forked_from,
+        it?.revision,
       ]
         .filter(Boolean)
         .join(" ")
@@ -120,6 +122,10 @@ export default function InternalSites() {
       const newId = buildDuplicateId(cloned?.meta?.site_id || id);
       cloned.meta = cloned.meta || {};
       cloned.meta.site_id = newId;
+      cloned.meta.forked_from = id;
+      delete cloned.meta.created_at;
+      delete cloned.meta.updated_at;
+      delete cloned.meta.revision;
 
       localStorage.setItem("nb_last_site_spec", JSON.stringify(cloned));
       window.open("/internal/preview", "_blank", "noopener,noreferrer");
@@ -191,7 +197,7 @@ export default function InternalSites() {
           <div>
             <div className="text-sm font-semibold text-neutral-900">Published Sites</div>
             <div className="text-xs text-neutral-600 mt-1">
-              Gestión interna de sites publicados (abrir, editar, duplicar, exportar, borrar)
+              Gestión interna de sites publicados con versión y trazabilidad básica
             </div>
           </div>
 
@@ -217,7 +223,7 @@ export default function InternalSites() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por id, nombre, sector, goal, personality..."
+            placeholder="Buscar por id, nombre, sector, goal, personality, fork..."
             className="w-full md:w-[520px] rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-neutral-900/10"
           />
           <div className="text-xs text-neutral-600">
@@ -234,27 +240,28 @@ export default function InternalSites() {
 
         <div className="mt-6 rounded-2xl border border-neutral-200 bg-white overflow-hidden">
           <div className="overflow-auto">
-            <table className="min-w-[1320px] w-full text-sm">
+            <table className="min-w-[1480px] w-full text-sm">
               <thead className="bg-neutral-50 text-neutral-600">
                 <tr>
                   <th className="text-left font-semibold px-4 py-3">Site</th>
                   <th className="text-left font-semibold px-4 py-3">Goal</th>
                   <th className="text-left font-semibold px-4 py-3">Pack / Archetype</th>
                   <th className="text-left font-semibold px-4 py-3">Personality</th>
-                  <th className="text-left font-semibold px-4 py-3">Published</th>
+                  <th className="text-left font-semibold px-4 py-3">Version</th>
+                  <th className="text-left font-semibold px-4 py-3">Updated</th>
                   <th className="text-left font-semibold px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td className="px-4 py-4 text-neutral-600" colSpan={6}>
+                    <td className="px-4 py-4 text-neutral-600" colSpan={7}>
                       Cargando…
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-neutral-600" colSpan={6}>
+                    <td className="px-4 py-6 text-neutral-600" colSpan={7}>
                       No hay sites publicados (o no coinciden con la búsqueda).
                     </td>
                   </tr>
@@ -270,20 +277,41 @@ export default function InternalSites() {
                             {it.location ? <> · {it.location}</> : null}
                             {it.sector ? <> · {it.sector}</> : null}
                           </div>
+                          {it.forked_from ? (
+                            <div className="mt-2 text-[11px] text-amber-700 font-mono">
+                              forked_from: {it.forked_from}
+                            </div>
+                          ) : null}
                         </td>
+
                         <td className="px-4 py-3 font-mono text-xs text-neutral-800">
                           {it.goal || "-"}
                         </td>
+
                         <td className="px-4 py-3 text-xs text-neutral-800">
                           <div className="font-mono">{it.pack || "-"}</div>
                           <div className="font-mono text-neutral-600 mt-1">{it.archetype || "-"}</div>
                         </td>
+
                         <td className="px-4 py-3 font-mono text-xs text-neutral-800">
                           {it.personality || "-"}
                         </td>
+
                         <td className="px-4 py-3 text-xs text-neutral-700">
-                          {it.published_at ? new Date(it.published_at).toLocaleString() : "-"}
+                          <div className="font-mono">rev {it.revision || 1}</div>
+                          {it.created_at ? (
+                            <div className="text-neutral-500 mt-1">
+                              created {new Date(it.created_at).toLocaleString()}
+                            </div>
+                          ) : null}
                         </td>
+
+                        <td className="px-4 py-3 text-xs text-neutral-700">
+                          {it.updated_at || it.published_at
+                            ? new Date(it.updated_at || it.published_at).toLocaleString()
+                            : "-"}
+                        </td>
+
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <a
@@ -348,7 +376,7 @@ export default function InternalSites() {
         </div>
 
         <div className="mt-4 text-xs text-neutral-500">
-          Tip: “Duplicate” crea una copia con un <code>site_id</code> nuevo y la carga en preview para que la edites y publiques.
+          Tip: al republicar un mismo <code>site_id</code> sube la revisión; al duplicar, se crea un fork con trazabilidad.
         </div>
       </div>
     </div>
