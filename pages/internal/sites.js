@@ -51,6 +51,10 @@ export default function InternalSites() {
   const [err, setErr] = useState("");
   const [busyKey, setBusyKey] = useState("");
 
+  const [jsonOpen, setJsonOpen] = useState(false);
+  const [jsonTitle, setJsonTitle] = useState("");
+  const [jsonText, setJsonText] = useState("");
+
   async function load() {
     setLoading(true);
     setErr("");
@@ -161,6 +165,38 @@ export default function InternalSites() {
     }
   }
 
+  async function handleViewJson(id) {
+    const key = `json:${id}`;
+    setBusyKey(key);
+    setErr("");
+
+    try {
+      const spec = await fetchSiteSpec(id);
+      setJsonTitle(id);
+      setJsonText(JSON.stringify(spec, null, 2));
+      setJsonOpen(true);
+    } catch (e) {
+      setErr(e?.message || "No se pudo abrir el JSON.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
+  async function handleCopyJson(id) {
+    const key = `copyjson:${id}`;
+    setBusyKey(key);
+    setErr("");
+
+    try {
+      const spec = await fetchSiteSpec(id);
+      await navigator.clipboard?.writeText(JSON.stringify(spec, null, 2));
+    } catch (e) {
+      setErr(e?.message || "No se pudo copiar el JSON.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
   async function handleDelete(id) {
     const ok = window.confirm(
       `Vas a despublicar y borrar el site "${id}". Esta acción elimina la URL pública.`
@@ -197,7 +233,7 @@ export default function InternalSites() {
           <div>
             <div className="text-sm font-semibold text-neutral-900">Published Sites</div>
             <div className="text-xs text-neutral-600 mt-1">
-              Gestión interna de sites publicados con versión y trazabilidad básica
+              Gestión interna de sites publicados con versión, trazabilidad e inspector
             </div>
           </div>
 
@@ -240,7 +276,7 @@ export default function InternalSites() {
 
         <div className="mt-6 rounded-2xl border border-neutral-200 bg-white overflow-hidden">
           <div className="overflow-auto">
-            <table className="min-w-[1480px] w-full text-sm">
+            <table className="min-w-[1620px] w-full text-sm">
               <thead className="bg-neutral-50 text-neutral-600">
                 <tr>
                   <th className="text-left font-semibold px-4 py-3">Site</th>
@@ -340,6 +376,22 @@ export default function InternalSites() {
                             </button>
 
                             <button
+                              onClick={() => handleViewJson(it.id)}
+                              disabled={busyKey === `json:${it.id}`}
+                              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
+                            >
+                              {busyKey === `json:${it.id}` ? "Opening…" : "View JSON"}
+                            </button>
+
+                            <button
+                              onClick={() => handleCopyJson(it.id)}
+                              disabled={busyKey === `copyjson:${it.id}`}
+                              className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
+                            >
+                              {busyKey === `copyjson:${it.id}` ? "Copying…" : "Copy JSON"}
+                            </button>
+
+                            <button
                               onClick={() => handleExport(it.id)}
                               disabled={busyKey === `export:${it.id}`}
                               className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50 disabled:opacity-50"
@@ -376,9 +428,43 @@ export default function InternalSites() {
         </div>
 
         <div className="mt-4 text-xs text-neutral-500">
-          Tip: al republicar un mismo <code>site_id</code> sube la revisión; al duplicar, se crea un fork con trazabilidad.
+          Tip: usa “View JSON” para QA rápido sin salir del dashboard.
         </div>
       </div>
+
+      {jsonOpen ? (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px] flex items-center justify-center p-6">
+          <div className="w-full max-w-5xl max-h-[85vh] rounded-2xl border border-neutral-200 bg-white shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-neutral-900">JSON Inspector</div>
+                <div className="text-xs text-neutral-600 mt-1 font-mono">{jsonTitle}</div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigator.clipboard?.writeText(jsonText)}
+                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50"
+                >
+                  Copy
+                </button>
+                <button
+                  onClick={() => setJsonOpen(false)}
+                  className="rounded-xl bg-neutral-900 text-white px-3 py-2 text-xs font-semibold hover:bg-neutral-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 bg-neutral-50">
+              <pre className="w-full max-h-[68vh] overflow-auto rounded-xl border border-neutral-200 bg-white p-4 text-[11px] leading-5 whitespace-pre-wrap break-words text-neutral-900">
+                {jsonText}
+              </pre>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
