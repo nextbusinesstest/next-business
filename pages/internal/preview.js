@@ -162,6 +162,7 @@ export default function PreviewPage() {
   const [publishErr, setPublishErr] = useState("");
 
   const [editorOpen, setEditorOpen] = useState(false);
+  const [jsonOpen, setJsonOpen] = useState(false);
   const [editorMsg, setEditorMsg] = useState("");
   const [draft, setDraft] = useState({
     siteId: "",
@@ -249,6 +250,14 @@ export default function PreviewPage() {
     };
   }, [spec]);
 
+  const jsonText = useMemo(() => {
+    try {
+      return JSON.stringify(spec, null, 2);
+    } catch {
+      return "";
+    }
+  }, [spec]);
+
   async function publishCurrentSpec() {
     if (!spec) return;
 
@@ -267,7 +276,6 @@ export default function PreviewPage() {
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
 
-      // reflejamos meta actualizada (revision / timestamps) si vuelve del API
       if (data?.meta) {
         const next = JSON.parse(JSON.stringify(spec));
         next.meta = next.meta || {};
@@ -305,6 +313,15 @@ export default function PreviewPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  }
+
+  async function copyCurrentJson() {
+    try {
+      await navigator.clipboard?.writeText(jsonText);
+      setEditorMsg("JSON copiado al portapapeles.");
+    } catch {
+      setPublishErr("No se pudo copiar el JSON.");
+    }
   }
 
   function duplicateCurrentSpec() {
@@ -441,6 +458,20 @@ export default function PreviewPage() {
                 className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
               >
                 {editorOpen ? "Close editor" : "Edit"}
+              </button>
+
+              <button
+                onClick={() => setJsonOpen((v) => !v)}
+                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
+              >
+                {jsonOpen ? "Close JSON" : "View JSON"}
+              </button>
+
+              <button
+                onClick={copyCurrentJson}
+                className="text-xs font-semibold rounded-lg border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
+              >
+                Copy JSON
               </button>
 
               <button
@@ -712,6 +743,34 @@ export default function PreviewPage() {
                     ) : null}
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {jsonOpen ? (
+          <div className="max-w-6xl mx-auto px-6 pt-5">
+            <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-neutral-900">JSON Inspector</div>
+                  <div className="text-xs text-neutral-600 mt-1 font-mono">
+                    {spec?.meta?.site_id || "-"}
+                  </div>
+                </div>
+
+                <button
+                  onClick={copyCurrentJson}
+                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold hover:bg-neutral-50"
+                >
+                  Copy JSON
+                </button>
+              </div>
+
+              <div className="p-4 bg-neutral-50">
+                <pre className="w-full max-h-[420px] overflow-auto rounded-xl border border-neutral-200 bg-white p-4 text-[11px] leading-5 whitespace-pre-wrap break-words text-neutral-900">
+                  {jsonText}
+                </pre>
               </div>
             </div>
           </div>
