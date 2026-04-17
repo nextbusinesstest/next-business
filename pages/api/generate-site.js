@@ -256,6 +256,11 @@ export default async function handler(req, res) {
     const tone = clampStr(body.tone, 24);
     const seed = clampStr(body.seed, 24);
 
+    // Contacto del negocio (aparece en header, footer y sección de contacto)
+    const contact_phone = clampStr(body.contact_phone, 30);
+    const contact_email = clampStr(body.contact_email, 120);
+    const contact_whatsapp = clampStr(body.contact_whatsapp, 30);
+
     // brand_personality override (from Lab/brief). Allow if personalityPreset recognizes it.
     const raw_personality = clampStr(
       body.brand_personality ?? body?.brand?.brand_personality,
@@ -295,6 +300,9 @@ export default async function handler(req, res) {
       services,
       tone,
       seed,
+      contact_phone,
+      contact_email,
+      contact_whatsapp,
       ...(brand_personality ? { brand_personality } : {}),
 
       // objetivo ya normalizado
